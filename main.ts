@@ -3,7 +3,6 @@ import {
   Context,
   Router,
 } from "https://deno.land/x/oak@v7.3.0/mod.ts";
-import "https://deno.land/x/dotenv/load.ts";
 import { getPricesById } from "./price.ts";
 import { fetchCoinGeckoIdMap } from "./id.ts";
 import { getPriceChange } from "./price_change.ts";
@@ -28,7 +27,7 @@ app.use(handleError);
 app.use(async (ctx, next) => {
   await next();
   const rt = ctx.response.headers.get("X-Response-Time");
-  if (Deno.env.get("ENV") === "dev") {
+  if (Deno.env.get("ENV") !== "prod") {
     console.log(`${ctx.request.method} ${ctx.request.url} - ${rt}`);
   }
 });
