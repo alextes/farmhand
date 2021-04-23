@@ -10,8 +10,9 @@ export type Price = {
   eth: number;
 };
 
-const tenMinInMs = 600000;
-const priceCache = new LRU({ capacity: 200, stdTTL: tenMinInMs });
+const oneHourInMs = 3600000;
+const priceCache = new LRU({ capacity: 200, stdTTL: oneHourInMs });
+
 export const getPricesById = async (
   id: string,
 ): Promise<Price> => {
