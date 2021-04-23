@@ -1,6 +1,6 @@
 import { LRU } from "./deps.ts";
 
-type Price = {
+export type Price = {
   usd: number;
   btc: number;
   eth: number;

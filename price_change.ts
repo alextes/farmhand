@@ -1,9 +1,23 @@
 import { format, LRU, subDays } from "./deps.ts";
-import { getPricesById } from "./price.ts";
+import { getPricesById, Price } from "./price.ts";
 
 const priceChangeCache = new LRU({ capacity: 100000 });
 
-export const getPriceChange = async (id: string, daysAgo: number) => {
+type PriceChangeResult = {
+  type: "priceChange";
+  value: Price;
+};
+
+type PriceChangeUnavailable = {
+  type: "priceChangeUnavailable";
+};
+
+type PriceChange = PriceChangeUnavailable | PriceChangeResult;
+
+export const getPriceChange = async (
+  id: string,
+  daysAgo: number,
+): Promise<PriceChange> => {
   const cacheKey = `priceChange-${id}-${daysAgo}`;
   if (priceChangeCache.has(cacheKey)) {
     return priceChangeCache.get(cacheKey);
@@ -19,6 +33,10 @@ export const getPriceChange = async (id: string, daysAgo: number) => {
 
   if (history.error !== undefined) {
     throw new Error(history.error);
+  }
+
+  if (history.market_data === undefined) {
+    return { type: "priceChangeUnavailable" };
   }
 
   const historicPrice = {
@@ -37,5 +55,5 @@ export const getPriceChange = async (id: string, daysAgo: number) => {
 
   priceChangeCache.set(cacheKey, priceChange);
 
-  return priceChange;
+  return { type: "priceChange", value: priceChange };
 };

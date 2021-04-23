@@ -67,7 +67,17 @@ router.get("/coin/:symbol/price-change/:daysAgo", async (context) => {
   }
 
   const historicPrices = await getPriceChange(id, daysAgo);
-  context.response.body = historicPrices;
+  switch (historicPrices.type) {
+    case "priceChangeUnavailable": {
+      context.response.status = 404;
+      context.response.body = "no market data for symbol";
+      return;
+    }
+    case "priceChange": {
+      context.response.body = historicPrices;
+      return;
+    }
+  }
 });
 
 app.use(router.routes());
