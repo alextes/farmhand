@@ -20,20 +20,20 @@ const handleError = async (
 
 app.use(handleError);
 
-app.use(async (ctx, next) => {
-  await next();
-  const rt = ctx.response.headers.get("X-Response-Time");
-  if (Deno.env.get("ENV") !== "prod") {
+if (Deno.env.get("ENV") === "dev") {
+  app.use(async (ctx, next) => {
+    await next();
+    const rt = ctx.response.headers.get("X-Response-Time");
     console.log(`${ctx.request.method} ${ctx.request.url} - ${rt}`);
-  }
-});
+  });
 
-app.use(async (ctx, next) => {
-  const start = Date.now();
-  await next();
-  const ms = Date.now() - start;
-  ctx.response.headers.set("X-Response-Time", `${ms}ms`);
-});
+  app.use(async (ctx, next) => {
+    const start = Date.now();
+    await next();
+    const ms = Date.now() - start;
+    ctx.response.headers.set("X-Response-Time", `${ms}ms`);
+  });
+}
 
 const router = new Router();
 
@@ -78,4 +78,5 @@ app.addEventListener("listen", ({ hostname, port }) => {
   );
 });
 
-await app.listen({ port: 8080 });
+const hostname = Deno.env.get("ENV") === "dev" ? "localhost" : "0.0.0.0";
+await app.listen({ hostname, port: 8080 });
