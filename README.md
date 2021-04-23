@@ -23,16 +23,19 @@ jgs `'-._|_|;:;_.-'` '::.  `"-
 ```
 
 ## Ideas
-* Simple APY is an extrapolation of earnings since start. In other words, take the value at t=0, take the value at t=now, and draw a line through both points to t=1y. We probably get a more accurate prediction by including data of each days value, i.e. a trend line.
+
+- Simple APY is an extrapolation of earnings since start. In other words, take the value at t=0, take the value at t=now, and draw a line through both points to t=1y. We probably get a more accurate prediction by including data of each days value, i.e. a trend line.
 
 ## CoinGecko API Use
+
 We use `/coins/list` to figure out CoinGecko coin IDs.
 We use `/simple/price` to get a token price.
 We use `/coins/{id}/history` to get percent changes in price over arbitrary periods.
 
 ## Caching
+
 We'd like to not hit the CoinGecko API for every requested price. We therefore implement the following caching strategies.
 
-* The full list of tickers is cached for 1 hour.
-* A simple price is cached for 10 minutes.
-* A historic price is cached indefinitely.
+- The full list of tickers is cached for 1 hour.
+- A simple price is cached for 10 minutes.
+- A historic price is cached indefinitely.
