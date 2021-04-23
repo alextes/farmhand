@@ -29,6 +29,15 @@ export const getPriceChange = async (
     format(historicDate, "dd-MM-yyyy", {})
   }`;
   const res = await fetch(uri);
+
+  if (res.status !== 200) {
+    const err = await res.text();
+    console.error(
+      `coingecko bad response, ${res.status} ${res.statusText} - ${err}`,
+    );
+    throw new Error(err);
+  }
+
   const history = await res.json();
 
   if (history.error !== undefined) {
