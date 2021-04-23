@@ -1,3 +1,4 @@
+import { decodeCoinGeckoRes } from "./coingecko.ts";
 import { LRU } from "./deps.ts";
 
 type RawCoinId = {
@@ -18,7 +19,8 @@ export const fetchCoinGeckoIdMap = async (): Promise<IdMap> => {
   }
 
   const res = await fetch("https://api.coingecko.com/api/v3/coins/list");
-  const coinGeckoRawIds = await res.json();
+
+  const coinGeckoRawIds = await decodeCoinGeckoRes<RawCoinId[]>(res);
   const coinGeckoIdMap = coinGeckoRawIds.reduce(
     (obj: Record<string, string>, rawId: RawCoinId) => {
       obj[rawId.symbol] = rawId.id;

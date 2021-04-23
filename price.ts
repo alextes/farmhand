@@ -1,4 +1,8 @@
 import { LRU } from "./deps.ts";
+import { decodeCoinGeckoRes } from "./coingecko.ts";
+
+// Structure CoinGecko uses in simple price responses
+type RawPrice = Record<string, Price>;
 
 export type Price = {
   usd: number;
@@ -8,7 +12,9 @@ export type Price = {
 
 const tenMinInMs = 600000;
 const priceCache = new LRU({ capacity: 200, stdTTL: tenMinInMs });
-export const getPricesById = async (id: string): Promise<Price> => {
+export const getPricesById = async (
+  id: string,
+): Promise<Price> => {
   const cacheKey = `price-${id}`;
   if (priceCache.has(cacheKey)) {
     return priceCache.get(cacheKey);
@@ -17,16 +23,7 @@ export const getPricesById = async (id: string): Promise<Price> => {
   const uri =
     `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd%2Cbtc%2Ceth`;
   const res = await fetch(uri);
-
-  if (res.status !== 200) {
-    const err = await res.text();
-    console.error(
-      `coingecko bad response, ${res.status} ${res.statusText} - ${err}`,
-    );
-    throw new Error(err);
-  }
-
-  const prices = await res.json();
+  const prices = await decodeCoinGeckoRes<RawPrice>(res);
 
   priceCache.set(cacheKey, prices[id]);
 

@@ -1,3 +1,4 @@
+import { decodeCoinGeckoRes } from "./coingecko.ts";
 import { format, LRU, subDays } from "./deps.ts";
 import { getPricesById, Price } from "./price.ts";
 
@@ -14,6 +15,18 @@ type PriceChangeUnavailable = {
 
 type PriceChange = PriceChangeUnavailable | PriceChangeResult;
 
+type History = {
+  // deno-lint-ignore camelcase
+  market_data: {
+    // deno-lint-ignore camelcase
+    current_price: {
+      usd: number;
+      btc: number;
+      eth: number;
+    };
+  };
+};
+
 export const getPriceChange = async (
   id: string,
   daysAgo: number,
@@ -29,20 +42,7 @@ export const getPriceChange = async (
     format(historicDate, "dd-MM-yyyy", {})
   }`;
   const res = await fetch(uri);
-
-  if (res.status !== 200) {
-    const err = await res.text();
-    console.error(
-      `coingecko bad response, ${res.status} ${res.statusText} - ${err}`,
-    );
-    throw new Error(err);
-  }
-
-  const history = await res.json();
-
-  if (history.error !== undefined) {
-    throw new Error(history.error);
-  }
+  const history = await decodeCoinGeckoRes<History>(res);
 
   if (history.market_data === undefined) {
     return { type: "priceChangeUnavailable" };
