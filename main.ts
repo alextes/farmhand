@@ -1,8 +1,4 @@
-import {
-  Application,
-  Context,
-  Router,
-} from "https://deno.land/x/oak@v7.3.0/mod.ts";
+import { Application, Context, Router } from "./deps.ts";
 import { getPricesById } from "./price.ts";
 import { fetchCoinGeckoIdMap } from "./id.ts";
 import { getPriceChange } from "./price_change.ts";

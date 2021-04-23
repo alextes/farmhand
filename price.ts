@@ -1,4 +1,4 @@
-import { LRU } from "https://deno.land/x/velo@0.1.5/mod.ts";
+import { LRU } from "./deps.ts";
 
 type Price = {
   usd: number;

@@ -1,5 +1,4 @@
-import { format, subDays } from "https://deno.land/x/date_fns@v2.15.0/index.js";
-import { LRU } from "https://deno.land/x/velo@0.1.5/mod.ts";
+import { format, LRU, subDays } from "./deps.ts";
 import { getPricesById } from "./price.ts";
 
 const priceChangeCache = new LRU({ capacity: 100000 });
