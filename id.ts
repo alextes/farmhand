@@ -9,8 +9,8 @@ type RawCoinId = {
 
 type IdMap = Partial<Record<string, string | undefined>>;
 
-const hourInMs = 3600000;
-const idMapCache = new LRU({ capacity: 1, stdTTL: hourInMs });
+const twentyFourHoursInMs = 86400000;
+const idMapCache = new LRU({ capacity: 1, stdTTL: twentyFourHoursInMs });
 const idMapKey = "idMapKey";
 
 export const fetchCoinGeckoIdMap = async (): Promise<IdMap> => {
