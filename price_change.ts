@@ -42,7 +42,7 @@ export const getPriceChange = async (
     format(historicDate, "dd-MM-yyyy", {})
   }`;
   const res = await fetch(uri);
-  const history = await decodeCoinGeckoRes<History>(res);
+  const history = await decodeCoinGeckoRes(res) as History;
 
   if (history.market_data === undefined) {
     return { type: "priceChangeUnavailable" };

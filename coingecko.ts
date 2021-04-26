@@ -1,6 +1,6 @@
-export const decodeCoinGeckoRes = async <A>(
+export const decodeCoinGeckoRes = async (
   res: Response,
-): Promise<A> => {
+): Promise<unknown> => {
   if (res.status !== 200) {
     const errorText = `coingecko bad response ${res.status} ${res.statusText}`;
     try {

@@ -24,7 +24,7 @@ export const getPricesById = async (
   const uri =
     `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd%2Cbtc%2Ceth`;
   const res = await fetch(uri);
-  const prices = await decodeCoinGeckoRes<RawPrice>(res);
+  const prices = await decodeCoinGeckoRes(res) as RawPrice;
 
   priceCache.set(cacheKey, prices[id]);
 
