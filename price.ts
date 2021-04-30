@@ -1,7 +1,11 @@
-import { LRU } from "./deps.ts";
-import { decodeCoinGeckoRes } from "./coingecko.ts";
+import { LRU, pipe, TE } from "./deps.ts";
+import { ApiError, decodeCoingeckoRequest } from "./coingecko.ts";
 
-// Structure CoinGecko uses in simple price responses
+type HttpError = { kind: "httpError"; error: Error };
+
+/**
+ * Structure CoinGecko uses in simple price responses
+ */
 type RawPrice = Record<string, Price>;
 
 export type Price = {
@@ -11,22 +15,34 @@ export type Price = {
 };
 
 const oneHourInMs = 3600000;
-const priceCache = new LRU({ capacity: 200, stdTTL: oneHourInMs });
+const priceCache = new LRU<Price>({ capacity: 200, stdTTL: oneHourInMs });
 
-export const getPricesById = async (
+export const getPricesById = (
   id: string,
-): Promise<Price> => {
+): TE.TaskEither<HttpError | ApiError, Price> => {
   const cacheKey = `price-${id}`;
-  if (priceCache.has(cacheKey)) {
-    return priceCache.get(cacheKey);
+  const cValue = priceCache.get(cacheKey);
+  if (cValue !== undefined) {
+    return TE.right(cValue);
   }
 
   const uri =
     `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd%2Cbtc%2Ceth`;
-  const res = await fetch(uri);
-  const prices = await decodeCoinGeckoRes(res) as RawPrice;
 
-  priceCache.set(cacheKey, prices[id]);
-
-  return prices[id];
+  return pipe(
+    () => fetch(uri),
+    TE.fromFailableTask<HttpError, Response>(
+      (e) => ({ kind: "httpError", error: (new Error(`${e}`)) }),
+    ),
+    TE.widen<ApiError>(),
+    TE.chain<ApiError | HttpError, Response, RawPrice>((res) =>
+      decodeCoingeckoRequest<RawPrice>(res)
+    ),
+    TE.map(
+      (rawPrice: RawPrice): Price => {
+        priceCache.set(cacheKey, rawPrice[id]);
+        return rawPrice[id];
+      },
+    ),
+  );
 };

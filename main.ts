@@ -1,4 +1,4 @@
-import { Application, Context, Router } from "./deps.ts";
+import { Application, Context, pipe, Router, TE } from "./deps.ts";
 import { getPricesById } from "./price.ts";
 import { fetchCoinGeckoIdMap } from "./id.ts";
 import { getPriceChange } from "./price_change.ts";
@@ -49,8 +49,26 @@ router.get("/coin/:symbol/price", async (context) => {
     return;
   }
 
-  const prices = await getPricesById(id);
-  context.response.body = prices;
+  await pipe(
+    getPricesById(id[0]),
+    TE.map((price) => {
+      context.response.body = price;
+    }),
+    TE.mapLeft((error) => {
+      switch (error.kind) {
+        case "tooManyRequests":
+          console.warn("CoinGecko API limit reached");
+          context.response.status = 429;
+          break;
+        case "decodeError":
+        case "coingeckoError":
+        case "httpError":
+        default:
+          context.response.status = 500;
+          break;
+      }
+    }),
+  )();
 });
 
 router.get("/coin/:symbol/price-change/:daysAgo", async (context) => {
