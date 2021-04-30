@@ -1,5 +1,5 @@
-import { decodeCoinGeckoRes } from "./coingecko.ts";
 import { LRU } from "./deps.ts";
+import { reduce } from "https://deno.land/x/fae@v1.0.0/mod.ts";
 
 type RawCoinId = {
   id: string;
@@ -7,28 +7,35 @@ type RawCoinId = {
   name: string;
 };
 
-type IdMap = Partial<Record<string, string | undefined>>;
+type IdMap = Partial<Record<string, string[]>>;
 
 const twentyFourHoursInMs = 86400000;
-const idMapCache = new LRU({ capacity: 1, stdTTL: twentyFourHoursInMs });
+const idMapCache = new LRU<IdMap>({ capacity: 1, stdTTL: twentyFourHoursInMs });
 const idMapKey = "idMapKey";
 
 export const fetchCoinGeckoIdMap = async (): Promise<IdMap> => {
-  if (idMapCache.has(idMapKey)) {
-    return idMapCache.get(idMapKey);
+  const cValue = idMapCache.get(idMapKey);
+  if (cValue !== undefined) {
+    return cValue;
   }
 
   const res = await fetch("https://api.coingecko.com/api/v3/coins/list");
+  if (res.status !== 200) {
+    const errorText = `coingecko bad response ${res.status} ${res.statusText}`;
+    throw new Error(errorText);
+  }
 
-  const coinGeckoRawIds = await decodeCoinGeckoRes(res) as RawCoinId[];
-  const coinGeckoIdMap = coinGeckoRawIds.reduce(
-    (obj: Record<string, string>, rawId: RawCoinId) => {
-      obj[rawId.symbol] = rawId.id;
-      return obj;
+  const rawIds: RawCoinId[] = await res.json();
+  const idMap = reduce(
+    (map, rawId: RawCoinId) => {
+      const ids = map[rawId.symbol] || [];
+      map[rawId.symbol] = [...ids, rawId.id];
+      return map;
     },
-    {},
+    {} as IdMap,
+    rawIds,
   );
 
-  idMapCache.set(idMapKey, coinGeckoIdMap);
-  return coinGeckoIdMap;
+  idMapCache.set(idMapKey, idMap);
+  return idMap;
 };

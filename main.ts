@@ -66,7 +66,7 @@ router.get("/coin/:symbol/price-change/:daysAgo", async (context) => {
     return;
   }
 
-  const historicPrices = await getPriceChange(id, daysAgo);
+  const historicPrices = await getPriceChange(id[0], daysAgo);
   switch (historicPrices.type) {
     case "priceChangeUnavailable": {
       context.response.status = 404;
