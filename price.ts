@@ -3,20 +3,20 @@ import { LRU } from "./deps.ts";
 /**
  * Structure CoinGecko uses in simple price responses
  */
-type RawPrice = Record<string, Price>;
+type RawPrice = Record<string, MultiPrice>;
 
-export type Price = {
+export type MultiPrice = {
   usd: number;
   btc: number;
   eth: number;
 };
 
 const oneHourInMs = 3600000;
-const priceCache = new LRU<Price>({ capacity: 200, stdTTL: oneHourInMs });
+const priceCache = new LRU<MultiPrice>({ capacity: 200, stdTTL: oneHourInMs });
 
 export const getPricesById = async (
   id: string,
-): Promise<Price> => {
+): Promise<MultiPrice> => {
   const cacheKey = `price-${id}`;
   const cValue = priceCache.get(cacheKey);
   if (cValue !== undefined) {

@@ -1,7 +1,8 @@
-import { Application, Context, Router } from "./deps.ts";
+import { Application, Context, E, pipe, Router } from "./deps.ts";
 import { getPricesById } from "./price.ts";
 import { fetchCoinGeckoIdMap } from "./id.ts";
 import { getPriceChange } from "./price_change.ts";
+import { Base } from "./base_unit.ts";
 
 const app = new Application();
 
@@ -53,31 +54,51 @@ router.get("/coin/:symbol/price", async (context) => {
   context.response.body = price;
 });
 
-router.get("/coin/:symbol/price-change/:daysAgo", async (context) => {
+router.post("/coin/:symbol/price-change/", async (context) => {
   const symbol = context.params.symbol!;
-  const daysAgo = Number(context.params.daysAgo);
+  if (!context.request.hasBody) {
+    context.response.status = 400;
+    context.response.body = { msg: "missing request parameters" };
+    return;
+  }
+
+  const result = context.request.body({ type: "json" });
+  type Body = { base: Base; daysAgo: number };
+  const { base, daysAgo }: Body = await result.value;
 
   const idMap = await fetchCoinGeckoIdMap();
   const id = idMap[symbol];
 
   if (id === undefined) {
     context.response.status = 404;
-    context.response.body = `no coingecko symbol ticker found for ${symbol}`;
+    context.response.body = {
+      msg: `no coingecko symbol ticker found for ${symbol}`,
+    };
     return;
   }
 
-  const historicPrices = await getPriceChange(id[0], daysAgo);
-  switch (historicPrices.type) {
-    case "priceChangeUnavailable": {
-      context.response.status = 404;
-      context.response.body = "no market data for symbol";
-      return;
-    }
-    case "priceChange": {
-      context.response.body = historicPrices;
-      return;
-    }
-  }
+  // TODO: pick id by market cap
+  const ePriceChange = await getPriceChange(id[0], daysAgo, base);
+
+  pipe(
+    ePriceChange,
+    E.fold(
+      (error) => {
+        switch (error) {
+          case "NoHistoricPrice":
+            context.response.status = 404;
+            context.response.body = { msg: "no market data for symbol" };
+            break;
+
+          default:
+            throw new Error(error);
+        }
+      },
+      (priceChange) => {
+        context.response.body = { [base]: priceChange };
+      },
+    ),
+  );
 });
 
 app.use(router.routes());
