@@ -30,12 +30,12 @@ jgs `'-._|_|;:;_.-'` '::.  `"-
 
 We use `/coins/list` to figure out CoinGecko coin IDs.
 We use `/simple/price` to get a token price.
-We use `/coins/{id}/history` to get percent changes in price over arbitrary periods.
+We use `/coins/{id}/market_chart` to get percent changes in price over arbitrary periods.
 
 ## Caching
 
 We'd like to not hit the CoinGecko API for every requested price. We therefore implement the following caching strategies.
 
-- The full list of tickers is cached for 1 hour.
-- A simple price is cached for 10 minutes.
+- The full list of tickers is cached for 24 hours.
+- A simple price is cached for 60 minutes.
 - A historic price is cached indefinitely.

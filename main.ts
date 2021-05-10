@@ -1,8 +1,6 @@
-import { Application, Context, E, pipe, Router } from "./deps.ts";
-import { getPricesById } from "./price.ts";
-import { fetchCoinGeckoIdMap } from "./id.ts";
-import { getPriceChange } from "./price_change.ts";
-import { Base } from "./base_unit.ts";
+import { Application, Context, Router } from "./deps.ts";
+import { handleGetPrice } from "./price.ts";
+import { handleGetPriceChange } from "./price_change.ts";
 
 const app = new Application();
 
@@ -38,68 +36,9 @@ if (Deno.env.get("ENV") === "dev") {
 
 const router = new Router();
 
-router.get("/coin/:symbol/price", async (context) => {
-  const symbol = context.params.symbol!;
+router.get("/coin/:symbol/price", handleGetPrice);
 
-  const idMap = await fetchCoinGeckoIdMap();
-  const id = idMap[symbol];
-
-  if (id === undefined) {
-    context.response.status = 404;
-    context.response.body = `no coingecko symbol ticker found for ${symbol}`;
-    return;
-  }
-
-  const price = await getPricesById(id[0]);
-  context.response.body = price;
-});
-
-router.post("/coin/:symbol/price-change/", async (context) => {
-  const symbol = context.params.symbol!;
-  if (!context.request.hasBody) {
-    context.response.status = 400;
-    context.response.body = { msg: "missing request parameters" };
-    return;
-  }
-
-  const result = context.request.body({ type: "json" });
-  type Body = { base: Base; daysAgo: number };
-  const { base, daysAgo }: Body = await result.value;
-
-  const idMap = await fetchCoinGeckoIdMap();
-  const id = idMap[symbol];
-
-  if (id === undefined) {
-    context.response.status = 404;
-    context.response.body = {
-      msg: `no coingecko symbol ticker found for ${symbol}`,
-    };
-    return;
-  }
-
-  // TODO: pick id by market cap
-  const ePriceChange = await getPriceChange(id[0], daysAgo, base);
-
-  pipe(
-    ePriceChange,
-    E.fold(
-      (error) => {
-        switch (error) {
-          case "NoHistoricPrice":
-            context.response.status = 404;
-            context.response.body = { msg: "no market data for symbol" };
-            break;
-
-          default:
-            throw new Error(error);
-        }
-      },
-      (priceChange) => {
-        context.response.body = { [base]: priceChange };
-      },
-    ),
-  );
-});
+router.post("/coin/:symbol/price-change/", handleGetPriceChange);
 
 app.use(router.routes());
 

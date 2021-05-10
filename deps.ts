@@ -8,5 +8,9 @@ export {
   getUnixTime,
   subDays,
 } from "https://deno.land/x/date_fns@v2.15.0/index.js";
-export * as E from "https://deno.land/x/hkts@v0.0.51/either.ts";
-export { pipe } from "https://deno.land/x/hkts@v0.0.51/fns.ts";
+export * as A from "https://deno.land/x/fun@v1.0.0/array.ts";
+export * as E from "https://deno.land/x/fun@v1.0.0/either.ts";
+export * as O from "https://deno.land/x/fun@v1.0.0/option.ts";
+export * as T from "https://deno.land/x/fun@v1.0.0/task.ts";
+export * as TE from "https://deno.land/x/fun@v1.0.0/task_either.ts";
+export { pipe } from "https://deno.land/x/fun@v1.0.0/fns.ts";

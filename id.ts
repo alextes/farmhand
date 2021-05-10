@@ -1,5 +1,7 @@
 import { LRU } from "./deps.ts";
-import { reduce } from "https://deno.land/x/fae@v1.0.0/mod.ts";
+import * as A from "https://deno.land/x/fun@v1.0.0/array.ts";
+import { pipe } from "https://deno.land/x/fun@v1.0.0/fns.ts";
+import * as M from "https://deno.land/x/fun@v1.0.0/map.ts";
 
 type RawCoinId = {
   id: string;
@@ -7,7 +9,7 @@ type RawCoinId = {
   name: string;
 };
 
-type IdMap = Partial<Record<string, string[]>>;
+type IdMap = Map<string, string[]>;
 
 const twentyFourHoursInMs = 86400000;
 const idMapCache = new LRU<IdMap>({ capacity: 1, stdTTL: twentyFourHoursInMs });
@@ -26,14 +28,13 @@ export const fetchCoinGeckoIdMap = async (): Promise<IdMap> => {
   }
 
   const rawIds: RawCoinId[] = await res.json();
-  const idMap = reduce(
-    (map, rawId: RawCoinId) => {
-      const ids = map[rawId.symbol] || [];
-      map[rawId.symbol] = [...ids, rawId.id];
-      return map;
-    },
-    {} as IdMap,
+  const idMap = pipe(
     rawIds,
+    A.reduce((map, rawId: RawCoinId) => {
+      const ids = map.get(rawId.symbol) || [];
+      map.set(rawId.symbol, [...ids, rawId.id]);
+      return map;
+    }, M.empty() as Map<string, string[]>),
   );
 
   idMapCache.set(idMapKey, idMap);
