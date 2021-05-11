@@ -1,7 +1,8 @@
 import { RouterContext } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { RouteParams } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { LRU } from "./deps.ts";
-import { fetchCoinGeckoIdMap, IdMapCache } from "./id.ts";
+import { fetchCoinGeckoIdMap } from "./id.ts";
+import { State } from "./server.ts";
 
 export type PriceCache = LRU<MultiPrice>;
 
@@ -41,13 +42,11 @@ const fetchMultiPrice = async (
 };
 
 export const handleGetPrice = async (
-  idMapCache: IdMapCache,
-  priceCache: PriceCache,
-  ctx: RouterContext<RouteParams, Record<string, unknown>>,
+  ctx: RouterContext<RouteParams, State>,
 ) => {
   const symbol = ctx.params.symbol!;
 
-  const idMap = await fetchCoinGeckoIdMap(idMapCache)();
+  const idMap = await fetchCoinGeckoIdMap(ctx.app.state.idMapCache);
 
   const mId = idMap.get(symbol);
   if (mId === undefined) {
@@ -60,6 +59,6 @@ export const handleGetPrice = async (
   // TODO: pick the token with the highest market cap
   const id = mId[0];
 
-  const price = await fetchMultiPrice(priceCache, id);
+  const price = await fetchMultiPrice(ctx.app.state.priceCache, id);
   ctx.response.body = price;
 };

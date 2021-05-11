@@ -16,14 +16,14 @@ const handleError = async (
   }
 };
 
-export type SharedState = {
+export type State = {
   idMapCache: IdMapCache;
   priceCache: PriceCache;
   historicPriceCache: HistoricPriceCache;
 };
 
-export const makeApp = (sharedState: SharedState) => {
-  const app = new Application();
+export const makeApp = (state: State) => {
+  const app = new Application({ state });
 
   app.use(handleError);
 
@@ -44,21 +44,9 @@ export const makeApp = (sharedState: SharedState) => {
 
   const router = new Router();
 
-  router.get(
-    "/coin/:symbol/price",
-    (ctx) =>
-      handleGetPrice(sharedState.idMapCache, sharedState.priceCache, ctx),
-  );
+  router.get("/coin/:symbol/price", handleGetPrice);
 
-  router.post(
-    "/coin/:symbol/price-change/",
-    (ctx) =>
-      handleGetPriceChange(
-        sharedState.historicPriceCache,
-        sharedState.idMapCache,
-        ctx,
-      ),
-  );
+  router.post("/coin/:symbol/price-change/", handleGetPriceChange);
 
   app.use(router.routes());
 

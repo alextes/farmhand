@@ -1,9 +1,10 @@
 import { RouterContext } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { RouteParams } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { Base } from "./base_unit.ts";
-import { E, getUnixTime, LRU, O, pipe, subDays, TE } from "./deps.ts";
-import { fetchCoinGeckoIdMap, IdMapCache } from "./id.ts";
+import { getUnixTime, LRU, O, pipe, subDays, TE } from "./deps.ts";
+import { fetchCoinGeckoIdMap } from "./id.ts";
 import * as A from "https://deno.land/x/fun@v1.0.0/array.ts";
+import { State } from "./server.ts";
 
 export type HistoricPriceCache = LRU<number>;
 
@@ -43,12 +44,12 @@ type ResponseError = {
  * a cache miss, we fetch the historic prices back to the sought after date. As
  * CoinGecko returns us all days since then, we immediately cache those too.
  */
-const getHistoricPrice = async (
+const getHistoricPrice = (
   historicPriceCache: HistoricPriceCache,
   id: string,
   base: Base,
   daysAgo: number,
-): Promise<E.Either<ResponseError, number>> => {
+): TE.TaskEither<ResponseError, number> => {
   const targetTimestamp = pipe(
     new Date(Date.now()),
     // To compare the date to CoinGecko timestamps we need start-of-day
@@ -62,7 +63,7 @@ const getHistoricPrice = async (
 
   const cachedPrice = historicPriceCache.get(key);
   if (cachedPrice !== undefined) {
-    return E.right(cachedPrice);
+    return TE.right(cachedPrice);
   }
 
   // CoinGecko uses 'days' as today up to but excluding n 'days' ago, we want
@@ -70,36 +71,50 @@ const getHistoricPrice = async (
   const coinGeckoDaysAgo = daysAgo + 1;
   const uri =
     `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=${base}&days=${coinGeckoDaysAgo}&interval=daily`;
-  const res = await fetch(uri);
-
-  if (res.status === 429) {
-    return E.left({ kind: "TooManyRequests", status: 429 });
-  }
-
-  if (res.status !== 200) {
-    console.error(`coingecko bad response ${res.status} ${res.statusText}`);
-    return E.left({ kind: "UnknownError", status: 500 });
-  }
-
-  const history: History = await res.json();
-
-  // Cache historic prices
-  history.prices.forEach((pricePoint: PriceInTime) => {
-    const [msTimestamp, price] = pricePoint;
-    const timestamp = toUnixTimestamp(msTimestamp);
-    const historicPointKey = `${timestamp}-${id}-${base}`;
-    historicPriceCache.set(historicPointKey, price);
-  });
-
-  // Oldest price returned, in position 0, is the sought after price. We return
-  // it.
   return pipe(
-    history.prices,
-    A.lookup(0),
-    O.fold(
-      () => E.left({ kind: "NoHistoricPrice", status: 404 }),
-      (priceInTime) => E.right(priceInTime[1]),
-    ),
+    () => fetch(uri),
+    TE.fromFailableTask((error) => {
+      console.error(error);
+      return ({ kind: "UnknownError" as const, status: 500 });
+    }),
+    TE.chain((res): TE.TaskEither<ResponseError, History> => {
+      if (res.status === 429) {
+        return TE.left({ kind: "TooManyRequests", status: 429 });
+      }
+
+      if (res.status !== 200) {
+        console.error(`coingecko bad response ${res.status} ${res.statusText}`);
+        return TE.left({ kind: "UnknownError", status: 500 });
+      }
+
+      return pipe(
+        () => res.json() as Promise<History>,
+        TE.fromFailableTask((error) => {
+          console.error(error);
+          return ({ kind: "UnknownError", status: 500 });
+        }),
+      );
+    }),
+    TE.chain((history): TE.TaskEither<ResponseError, number> => {
+      // Cache historic prices
+      history.prices.forEach((pricePoint: PriceInTime) => {
+        const [msTimestamp, price] = pricePoint;
+        const timestamp = toUnixTimestamp(msTimestamp);
+        const historicPointKey = `${timestamp}-${id}-${base}`;
+        historicPriceCache.set(historicPointKey, price);
+      });
+
+      // Oldest price returned, in position 0, is the sought after price. We return
+      // it.
+      return pipe(
+        history.prices,
+        A.lookup(0),
+        O.fold(
+          () => TE.left({ kind: "NoHistoricPrice", status: 404 }),
+          (priceInTime) => TE.right(priceInTime[1]),
+        ),
+      );
+    }),
   );
 };
 
@@ -110,7 +125,7 @@ const getPriceChange = (
   daysAgo: number,
 ): TE.TaskEither<ResponseError, number> => (
   pipe(
-    () => getHistoricPrice(historicPriceCache, id, base, daysAgo),
+    getHistoricPrice(historicPriceCache, id, base, daysAgo),
     TE.chain((historicPrice) => {
       const todayTimestamp = pipe(
         new Date(Date.now()),
@@ -121,7 +136,7 @@ const getPriceChange = (
       const todayPrice = historicPriceCache.get(key);
 
       if (todayPrice === undefined) {
-        return () => getHistoricPrice(historicPriceCache, id, base, daysAgo);
+        return getHistoricPrice(historicPriceCache, id, base, daysAgo);
       }
 
       return TE.right(todayPrice / historicPrice - 1);
@@ -130,9 +145,7 @@ const getPriceChange = (
 );
 
 export const handleGetPriceChange = async (
-  historicPriceCache: HistoricPriceCache,
-  idMapCache: IdMapCache,
-  ctx: RouterContext<RouteParams, Record<string, unknown>>,
+  ctx: RouterContext<RouteParams, State>,
 ): Promise<void> => {
   const symbol = ctx.params.symbol!;
   if (!ctx.request.hasBody) {
@@ -145,7 +158,7 @@ export const handleGetPriceChange = async (
   type Body = { base: Base; daysAgo: number };
   const { base, daysAgo }: Body = await result.value;
 
-  const idMap = await fetchCoinGeckoIdMap(idMapCache)();
+  const idMap = await fetchCoinGeckoIdMap(ctx.app.state.idMapCache);
   const mId = idMap.get(symbol);
 
   if (mId === undefined) {
@@ -159,7 +172,7 @@ export const handleGetPriceChange = async (
   const id = mId[0];
 
   return pipe(
-    getPriceChange(historicPriceCache, id, base, daysAgo),
+    getPriceChange(ctx.app.state.historicPriceCache, id, base, daysAgo),
     TE.mapLeft(
       (error) => {
         switch (error.kind) {
