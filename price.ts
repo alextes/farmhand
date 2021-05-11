@@ -1,7 +1,9 @@
 import { RouterContext } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { RouteParams } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { LRU } from "./deps.ts";
-import { fetchCoinGeckoIdMap } from "./id.ts";
+import { fetchCoinGeckoIdMap, IdMapCache } from "./id.ts";
+
+export type PriceCache = LRU<MultiPrice>;
 
 /**
  * Structure CoinGecko uses in simple price responses
@@ -14,10 +16,8 @@ export type MultiPrice = {
   eth: number;
 };
 
-const oneHourInMs = 3600000;
-const priceCache = new LRU<MultiPrice>({ capacity: 200, stdTTL: oneHourInMs });
-
 const fetchMultiPrice = async (
+  priceCache: PriceCache,
   id: string,
 ): Promise<MultiPrice> => {
   const cacheKey = `price-${id}`;
@@ -41,21 +41,25 @@ const fetchMultiPrice = async (
 };
 
 export const handleGetPrice = async (
-  // deno-lint-ignore no-explicit-any
-  context: RouterContext<RouteParams, Record<string, any>>,
+  idMapCache: IdMapCache,
+  priceCache: PriceCache,
+  ctx: RouterContext<RouteParams, Record<string, unknown>>,
 ) => {
-  const symbol = context.params.symbol!;
+  const symbol = ctx.params.symbol!;
 
-  const idMap = await fetchCoinGeckoIdMap();
+  const idMap = await fetchCoinGeckoIdMap(idMapCache)();
+
   const mId = idMap.get(symbol);
   if (mId === undefined) {
-    context.response.status = 404;
-    context.response.body = `no coingecko symbol ticker found for ${symbol}`;
+    ctx.response.status = 404;
+    ctx.response.body = {
+      msg: `no coingecko symbol ticker found for ${symbol}`,
+    };
     return;
   }
   // TODO: pick the token with the highest market cap
   const id = mId[0];
 
-  const price = await fetchMultiPrice(id);
-  context.response.body = price;
+  const price = await fetchMultiPrice(priceCache, id);
+  ctx.response.body = price;
 };

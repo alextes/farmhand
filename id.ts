@@ -11,32 +11,33 @@ type RawCoinId = {
 
 type IdMap = Map<string, string[]>;
 
-const twentyFourHoursInMs = 86400000;
-const idMapCache = new LRU<IdMap>({ capacity: 1, stdTTL: twentyFourHoursInMs });
+export type IdMapCache = LRU<IdMap>;
 const idMapKey = "idMapKey";
 
-export const fetchCoinGeckoIdMap = async (): Promise<IdMap> => {
-  const cValue = idMapCache.get(idMapKey);
-  if (cValue !== undefined) {
-    return cValue;
-  }
+export const fetchCoinGeckoIdMap = (idMapCache: IdMapCache) =>
+  async (): Promise<IdMap> => {
+    const cValue = idMapCache.get(idMapKey);
+    if (cValue !== undefined) {
+      return cValue;
+    }
 
-  const res = await fetch("https://api.coingecko.com/api/v3/coins/list");
-  if (res.status !== 200) {
-    const errorText = `coingecko bad response ${res.status} ${res.statusText}`;
-    throw new Error(errorText);
-  }
+    const res = await fetch("https://api.coingecko.com/api/v3/coins/list");
+    if (res.status !== 200) {
+      const errorText =
+        `coingecko bad response ${res.status} ${res.statusText}`;
+      throw new Error(errorText);
+    }
 
-  const rawIds: RawCoinId[] = await res.json();
-  const idMap = pipe(
-    rawIds,
-    A.reduce((map, rawId: RawCoinId) => {
-      const ids = map.get(rawId.symbol) || [];
-      map.set(rawId.symbol, [...ids, rawId.id]);
-      return map;
-    }, M.empty() as Map<string, string[]>),
-  );
+    const rawIds: RawCoinId[] = await res.json();
+    const idMap = pipe(
+      rawIds,
+      A.reduce((map, rawId: RawCoinId) => {
+        const ids = map.get(rawId.symbol) || [];
+        map.set(rawId.symbol, [...ids, rawId.id]);
+        return map;
+      }, M.empty() as Map<string, string[]>),
+    );
 
-  idMapCache.set(idMapKey, idMap);
-  return idMap;
-};
+    idMapCache.set(idMapKey, idMap);
+    return idMap;
+  };

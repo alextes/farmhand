@@ -2,10 +2,10 @@ import { RouterContext } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { RouteParams } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { Base } from "./base_unit.ts";
 import { E, getUnixTime, LRU, O, pipe, subDays, TE } from "./deps.ts";
-import { fetchCoinGeckoIdMap } from "./id.ts";
+import { fetchCoinGeckoIdMap, IdMapCache } from "./id.ts";
 import * as A from "https://deno.land/x/fun@v1.0.0/array.ts";
 
-const historicPriceCache = new LRU<number>({ capacity: 100000 });
+export type HistoricPriceCache = LRU<number>;
 
 /**
  * milisecond unix timestamp
@@ -44,6 +44,7 @@ type ResponseError = {
  * CoinGecko returns us all days since then, we immediately cache those too.
  */
 const getHistoricPrice = async (
+  historicPriceCache: HistoricPriceCache,
   id: string,
   base: Base,
   daysAgo: number,
@@ -103,12 +104,13 @@ const getHistoricPrice = async (
 };
 
 const getPriceChange = (
+  historicPriceCache: HistoricPriceCache,
   id: string,
   base: Base,
   daysAgo: number,
 ): TE.TaskEither<ResponseError, number> => (
   pipe(
-    () => getHistoricPrice(id, base, daysAgo),
+    () => getHistoricPrice(historicPriceCache, id, base, daysAgo),
     TE.chain((historicPrice) => {
       const todayTimestamp = pipe(
         new Date(Date.now()),
@@ -119,7 +121,7 @@ const getPriceChange = (
       const todayPrice = historicPriceCache.get(key);
 
       if (todayPrice === undefined) {
-        return () => getHistoricPrice(id, base, daysAgo);
+        return () => getHistoricPrice(historicPriceCache, id, base, daysAgo);
       }
 
       return TE.right(todayPrice / historicPrice - 1);
@@ -128,26 +130,27 @@ const getPriceChange = (
 );
 
 export const handleGetPriceChange = async (
-  // deno-lint-ignore no-explicit-any
-  context: RouterContext<RouteParams, Record<string, any>>,
+  historicPriceCache: HistoricPriceCache,
+  idMapCache: IdMapCache,
+  ctx: RouterContext<RouteParams, Record<string, unknown>>,
 ): Promise<void> => {
-  const symbol = context.params.symbol!;
-  if (!context.request.hasBody) {
-    context.response.status = 400;
-    context.response.body = { msg: "missing request parameters" };
+  const symbol = ctx.params.symbol!;
+  if (!ctx.request.hasBody) {
+    ctx.response.status = 400;
+    ctx.response.body = { msg: "missing request parameters" };
     return;
   }
 
-  const result = context.request.body({ type: "json" });
+  const result = ctx.request.body({ type: "json" });
   type Body = { base: Base; daysAgo: number };
   const { base, daysAgo }: Body = await result.value;
 
-  const idMap = await fetchCoinGeckoIdMap();
+  const idMap = await fetchCoinGeckoIdMap(idMapCache)();
   const mId = idMap.get(symbol);
 
   if (mId === undefined) {
-    context.response.status = 404;
-    context.response.body = {
+    ctx.response.status = 404;
+    ctx.response.body = {
       msg: `no coingecko symbol ticker found for ${symbol}`,
     };
     return;
@@ -156,23 +159,23 @@ export const handleGetPriceChange = async (
   const id = mId[0];
 
   return pipe(
-    getPriceChange(id, base, daysAgo),
+    getPriceChange(historicPriceCache, id, base, daysAgo),
     TE.mapLeft(
       (error) => {
         switch (error.kind) {
           case "NoHistoricPrice":
-            context.response.status = error.status;
-            context.response.body = { msg: "no market data for symbol" };
+            ctx.response.status = error.status;
+            ctx.response.body = { msg: "no market data for symbol" };
             break;
           case "TooManyRequests":
-            context.response.status = error.status;
-            context.response.body = {
+            ctx.response.status = error.status;
+            ctx.response.body = {
               msg: "hit coingecko API request limit",
             };
             break;
           case "UnknownError":
-            context.response.status = error.status;
-            context.response.body = {
+            ctx.response.status = error.status;
+            ctx.response.body = {
               msg: "Unknown server error",
             };
             break;
@@ -181,7 +184,7 @@ export const handleGetPriceChange = async (
     ),
     TE.map(
       (priceChange) => {
-        context.response.body = { priceChange };
+        ctx.response.body = { priceChange };
       },
     ),
     ((a) => a().then(undefined)),
