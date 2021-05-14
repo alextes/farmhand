@@ -28,9 +28,9 @@ jgs `'-._|_|;:;_.-'` '::.  `"-
 
 ## CoinGecko API Use
 
-We use `/coins/list` to figure out CoinGecko coin IDs.
-We use `/simple/price` to get a token price.
-We use `/coins/{id}/market_chart` to get percent changes in price over arbitrary periods.
+- We use `/coins/list` to figure out CoinGecko coin IDs.
+- We use `/simple/price` to get a token price.
+- We use `/coins/{id}/market_chart` to get percent changes in price over arbitrary periods.
 
 ## Caching
 
