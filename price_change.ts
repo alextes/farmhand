@@ -2,9 +2,11 @@ import { RouterContext } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { RouteParams } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { Base } from "./base_unit.ts";
 import { getUnixTime, LRU, O, pipe, subDays, TE } from "./deps.ts";
-import { fetchCoinGeckoIdMap } from "./id.ts";
+import * as Id from "./id.ts";
 import * as A from "https://deno.land/x/fun@v1.0.0/array.ts";
 import { State } from "./server.ts";
+import { BadResponse, DecodeError, FetchError } from "./errors.ts";
+import { GetIdError } from "./id.ts";
 
 export type HistoricPriceCache = LRU<number>;
 
@@ -34,11 +36,12 @@ const startOfDay = (date: Date): Date => {
   return d;
 };
 
-type ResponseError = {
-  kind: "UnknownError" | "NoHistoricPrice" | "TooManyRequests";
-  status: number;
-};
-
+type NoHistoricPrice = { type: "NoHistoricPrice"; error: Error };
+type GetHistoricPriceError =
+  | BadResponse
+  | DecodeError
+  | FetchError
+  | NoHistoricPrice;
 /**
  * In order to decide whether we can calculate history we look in the cache. On
  * a cache miss, we fetch the historic prices back to the sought after date. As
@@ -49,7 +52,7 @@ const getHistoricPrice = (
   id: string,
   base: Base,
   daysAgo: number,
-): TE.TaskEither<ResponseError, number> => {
+): TE.TaskEither<GetHistoricPriceError, number> => {
   const targetTimestamp = pipe(
     new Date(Date.now()),
     // To compare the date to CoinGecko timestamps we need start-of-day
@@ -74,28 +77,35 @@ const getHistoricPrice = (
   return pipe(
     () => fetch(uri),
     TE.fromFailableTask((error) => {
-      console.error(error);
-      return ({ kind: "UnknownError" as const, status: 500 });
+      return ({ type: "FetchError" as const, error: error as Error });
     }),
-    TE.chain((res): TE.TaskEither<ResponseError, History> => {
+    TE.chain((res): TE.TaskEither<GetHistoricPriceError, History> => {
       if (res.status === 429) {
-        return TE.left({ kind: "TooManyRequests", status: 429 });
+        return TE.left({
+          type: "BadResponse",
+          error: new Error("Hit CoinGecko API rate limit"),
+          status: 429,
+        });
       }
 
       if (res.status !== 200) {
-        console.error(`coingecko bad response ${res.status} ${res.statusText}`);
-        return TE.left({ kind: "UnknownError", status: 500 });
+        return TE.left({
+          type: "BadResponse",
+          error: new Error(
+            `coingecko bad response ${res.status} ${res.statusText}`,
+          ),
+          status: 500,
+        });
       }
 
       return pipe(
         () => res.json() as Promise<History>,
         TE.fromFailableTask((error) => {
-          console.error(error);
-          return ({ kind: "UnknownError", status: 500 });
+          return ({ type: "DecodeError", error: error as Error });
         }),
       );
     }),
-    TE.chain((history): TE.TaskEither<ResponseError, number> => {
+    TE.chain((history): TE.TaskEither<GetHistoricPriceError, number> => {
       // Cache historic prices
       history.prices.forEach((pricePoint: PriceInTime) => {
         const [msTimestamp, price] = pricePoint;
@@ -110,7 +120,12 @@ const getHistoricPrice = (
         history.prices,
         A.lookup(0),
         O.fold(
-          () => TE.left({ kind: "NoHistoricPrice", status: 404 }),
+          () => {
+            return TE.left({
+              type: "NoHistoricPrice",
+              error: new Error(`No historic price for id ${id}`),
+            });
+          },
           (priceInTime) => TE.right(priceInTime[1]),
         ),
       );
@@ -123,7 +138,7 @@ const getPriceChange = (
   id: string,
   base: Base,
   daysAgo: number,
-): TE.TaskEither<ResponseError, number> => (
+): TE.TaskEither<GetHistoricPriceError, number> => (
   pipe(
     getHistoricPrice(historicPriceCache, id, base, daysAgo),
     TE.chain((historicPrice) => {
@@ -144,6 +159,8 @@ const getPriceChange = (
   )
 );
 
+type PriceChangeError = GetIdError | GetHistoricPriceError;
+
 export const handleGetPriceChange = async (
   ctx: RouterContext<RouteParams, State>,
 ): Promise<void> => {
@@ -158,43 +175,41 @@ export const handleGetPriceChange = async (
   type Body = { base: Base; daysAgo: number };
   const { base, daysAgo }: Body = await result.value;
 
-  const idMap = await fetchCoinGeckoIdMap(ctx.app.state.idMapCache);
-  const mId = idMap.get(symbol);
-
-  if (mId === undefined) {
-    ctx.response.status = 404;
-    ctx.response.body = {
-      msg: `no coingecko symbol ticker found for ${symbol}`,
-    };
-    return;
-  }
-  // TODO: pick the token with the highest market cap
-  const id = mId[0];
-
   return pipe(
-    getPriceChange(ctx.app.state.historicPriceCache, id, base, daysAgo),
-    TE.mapLeft(
-      (error) => {
-        switch (error.kind) {
-          case "NoHistoricPrice":
-            ctx.response.status = error.status;
-            ctx.response.body = { msg: "no market data for symbol" };
-            break;
-          case "TooManyRequests":
-            ctx.response.status = error.status;
-            ctx.response.body = {
-              msg: "hit coingecko API request limit",
-            };
-            break;
-          case "UnknownError":
-            ctx.response.status = error.status;
-            ctx.response.body = {
-              msg: "Unknown server error",
-            };
-            break;
-        }
-      },
+    Id.getIdBySymbol(ctx.app.state.idMapCache, symbol),
+    TE.widen<PriceChangeError>(),
+    TE.chain((id): TE.TaskEither<PriceChangeError, number> =>
+      getPriceChange(ctx.app.state.historicPriceCache, id, base, daysAgo)
     ),
+    TE.mapLeft((error) => {
+      switch (error.type) {
+        case "UnknownSymbol":
+          ctx.response.status = 404;
+          ctx.response.body = {
+            msg: `no coingecko symbol ticker found for ${symbol}`,
+          };
+          return undefined;
+        case "FetchError":
+        case "DecodeError":
+          ctx.response.status = 404;
+          ctx.response.body = {
+            msg: `no coingecko symbol ticker found for ${symbol}`,
+          };
+          return undefined;
+        case "BadResponse":
+          ctx.response.status = error.status;
+          ctx.response.body = {
+            msg: error.error.message,
+          };
+          return undefined;
+        case "NoHistoricPrice":
+          ctx.response.status = 404;
+          ctx.response.body = {
+            msg: `no historic price found for ${symbol}, ${daysAgo} days ago`,
+          };
+          return undefined;
+      }
+    }),
     TE.map(
       (priceChange) => {
         ctx.response.body = { priceChange };
