@@ -1,6 +1,7 @@
-import { A, LRU, pipe, TE } from "./deps.ts";
+import { A, pipe, TE } from "./deps.ts";
 import * as M from "https://deno.land/x/fun@v1.0.0/map.ts";
 import { BadResponse, DecodeError, FetchError } from "./errors.ts";
+import { milisFromHours } from "./duration.ts";
 
 type RawCoinId = {
   id: string;
@@ -10,17 +11,15 @@ type RawCoinId = {
 
 type IdMap = Map<string, string[]>;
 
-export type IdMapCache = LRU<IdMap>;
-const idMapKey = "idMapKey";
-
 type IdFetchError = BadResponse | DecodeError | FetchError;
 
 type UnknownSymbol = { type: "UnknownSymbol"; error: Error };
 export type GetIdError = IdFetchError | UnknownSymbol;
 
-export const fetchCoinGeckoIdMap = (
-  idMapCache: IdMapCache,
-): TE.TaskEither<IdFetchError, IdMap> => (
+const oneHourInMilis = milisFromHours(1);
+let cachedIdMap: IdMap = M.empty();
+
+export const fetchCoinGeckoIdMap = (): TE.TaskEither<IdFetchError, IdMap> => (
   pipe(
     () => fetch("https://api.coingecko.com/api/v3/coins/list"),
     TE.fromFailableTask((error) => ({
@@ -29,11 +28,11 @@ export const fetchCoinGeckoIdMap = (
     })),
     TE.chain((res): TE.TaskEither<IdFetchError, RawCoinId[]> => {
       if (res.status !== 200) {
-        const errorText =
-          `coingecko bad response ${res.status} ${res.statusText}`;
         return TE.left({
           type: "BadResponse" as const,
-          error: new Error(errorText),
+          error: new Error(
+            `coingecko bad response ${res.status} ${res.statusText}`,
+          ),
           status: res.status,
         });
       }
@@ -50,29 +49,30 @@ export const fetchCoinGeckoIdMap = (
       (map, rawId: RawCoinId) => {
         const ids = map.get(rawId.symbol) || [];
         map.set(rawId.symbol, [...ids, rawId.id]);
+        setTimeout(() => {
+          cachedIdMap = M.empty();
+        }, oneHourInMilis);
         return map;
       },
       M.empty() as Map<string, string[]>,
     )),
     TE.map((idMap) => {
-      idMapCache.set(idMapKey, idMap);
+      cachedIdMap = idMap;
       return idMap;
     }),
   )
 );
 
 export const getIdBySymbol = (
-  idMapCache: IdMapCache,
   symbol: string,
 ): TE.TaskEither<GetIdError, string> => {
-  const idMap = idMapCache.get(idMapKey)!;
-  const cValue = idMap.get(symbol);
+  const cValue = cachedIdMap.get(symbol);
   if (cValue !== undefined) {
     return TE.right(cValue[0]);
   }
 
   return pipe(
-    fetchCoinGeckoIdMap(idMapCache),
+    fetchCoinGeckoIdMap(),
     TE.chain((idMap): TE.TaskEither<GetIdError, string> => {
       // Some symbols have multiple ids. We currently return the first matching
       // id CoinGecko gave us. For some symbols we know almost certainly that

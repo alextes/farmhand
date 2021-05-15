@@ -176,7 +176,7 @@ export const handleGetPriceChange = async (
   const { base, daysAgo }: Body = await result.value;
 
   return pipe(
-    Id.getIdBySymbol(ctx.app.state.idMapCache, symbol),
+    Id.getIdBySymbol(symbol),
     TE.widen<PriceChangeError>(),
     TE.chain((id): TE.TaskEither<PriceChangeError, number> =>
       getPriceChange(ctx.app.state.historicPriceCache, id, base, daysAgo)

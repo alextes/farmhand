@@ -1,16 +1,33 @@
 import { assertEquals } from "https://deno.land/std@0.95.0/testing/asserts.ts";
 import { superoak } from "https://deno.land/x/superoak@4.2.0/mod.ts";
-import { LRU } from "./deps.ts";
+import { E, LRU, pipe, TE } from "./deps.ts";
 import { makeApp } from "./server.ts";
+import * as Id from "./id.ts";
 
 // We use a global cache with TTL timers. As we don't clear the timers we leak
 // async ops. Deno tests notices this, judging are test dangerously
 // non-deterministic, and fails the test. Therefore we mock the cache.
 
 const app = makeApp({
-  idMapCache: new LRU({ capacity: 0 }),
   priceCache: new LRU({ capacity: 0 }),
   historicPriceCache: new LRU({ capacity: 0 }),
+});
+
+const getOrThrow = <A>(either: E.Either<unknown, A>) => {
+  if (either.tag === "Right") {
+    return either.right;
+  }
+
+  throw either.left;
+};
+
+Deno.test("gets an id by symbol", async () => {
+  const id = await pipe(
+    Id.getIdBySymbol("eth"),
+    (te) => te().then(getOrThrow),
+  );
+
+  assertEquals(id, "ethereum");
 });
 
 Deno.test("returns price", async () => {

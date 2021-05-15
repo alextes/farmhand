@@ -1,5 +1,4 @@
 import { Application, Context, Router } from "./deps.ts";
-import { IdMapCache } from "./id.ts";
 import { handleGetPrice, PriceCache } from "./price.ts";
 import { handleGetPriceChange, HistoricPriceCache } from "./price_change.ts";
 
@@ -17,7 +16,6 @@ const handleError = async (
 };
 
 export type State = {
-  idMapCache: IdMapCache;
   priceCache: PriceCache;
   historicPriceCache: HistoricPriceCache;
 };
