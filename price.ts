@@ -79,7 +79,7 @@ export const handleGetPrice = (
   ctx: RouterContext<RouteParams, State>,
 ): Promise<void> => (
   pipe(
-    Id.getIdBySymbol(ctx.params.symbol!),
+    Id.getIdBySymbol(ctx.app.state.idMapCache, ctx.params.symbol!),
     TE.chain((id): TE.TaskEither<GetPriceError, MultiPrice> => (
       fetchMultiPrice(ctx.app.state.priceCache, id)
     )),

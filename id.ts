@@ -1,7 +1,5 @@
-import { A, pipe, TE } from "./deps.ts";
-import * as M from "https://deno.land/x/fun@v1.0.0/map.ts";
+import { A, LRU, M, pipe, TE } from "./deps.ts";
 import { BadResponse, DecodeError, FetchError } from "./errors.ts";
-import { milisFromHours } from "./duration.ts";
 
 type RawCoinId = {
   id: string;
@@ -10,16 +8,18 @@ type RawCoinId = {
 };
 
 type IdMap = Map<string, string[]>;
+export type IdMapCache = LRU<IdMap>;
 
 type IdFetchError = BadResponse | DecodeError | FetchError;
 
 type UnknownSymbol = { type: "UnknownSymbol"; error: Error };
 export type GetIdError = IdFetchError | UnknownSymbol;
 
-const oneHourInMilis = milisFromHours(1);
-let cachedIdMap: IdMap = M.empty();
+const idMapKey = "id-map-key";
 
-export const fetchCoinGeckoIdMap = (): TE.TaskEither<IdFetchError, IdMap> => (
+export const fetchCoinGeckoIdMap = (
+  cache: IdMapCache,
+): TE.TaskEither<IdFetchError, IdMap> => (
   pipe(
     () => fetch("https://api.coingecko.com/api/v3/coins/list"),
     TE.fromFailableTask((error) => ({
@@ -49,30 +49,28 @@ export const fetchCoinGeckoIdMap = (): TE.TaskEither<IdFetchError, IdMap> => (
       (map, rawId: RawCoinId) => {
         const ids = map.get(rawId.symbol) || [];
         map.set(rawId.symbol, [...ids, rawId.id]);
-        setTimeout(() => {
-          cachedIdMap = M.empty();
-        }, oneHourInMilis);
         return map;
       },
       M.empty() as Map<string, string[]>,
     )),
     TE.map((idMap) => {
-      cachedIdMap = idMap;
+      cache.set(idMapKey, idMap);
       return idMap;
     }),
   )
 );
 
 export const getIdBySymbol = (
+  idMapCache: IdMapCache,
   symbol: string,
 ): TE.TaskEither<GetIdError, string> => {
-  const cValue = cachedIdMap.get(symbol);
+  const cValue = idMapCache.get(idMapKey)!.get(symbol);
   if (cValue !== undefined) {
     return TE.right(cValue[0]);
   }
 
   return pipe(
-    fetchCoinGeckoIdMap(),
+    fetchCoinGeckoIdMap(idMapCache),
     TE.chain((idMap): TE.TaskEither<GetIdError, string> => {
       // Some symbols have multiple ids. We currently return the first matching
       // id CoinGecko gave us. For some symbols we know almost certainly that
