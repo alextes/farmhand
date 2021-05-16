@@ -44,9 +44,9 @@ export const makeApp = (state: State) => {
 
   const router = new Router();
 
-  router.get("/coin/:symbol/price", handleGetPrice);
+  router.post("/coin/:symbol/price", handleGetPrice);
 
-  router.post("/coin/:symbol/price-change/", handleGetPriceChange);
+  router.post("/coin/:symbol/price-change", handleGetPriceChange);
 
   app.use(router.routes());
 

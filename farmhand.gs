@@ -12,6 +12,9 @@ function FHPRICE(ticker, base = "usd") {
   if (ticker === undefined) {
     throw new Error("need a ticker to quote")
   }
+  if (typeof ticker !== "string") {
+    throw new Error("ticker should be text")
+  }
 
   var lowercaseTicker = ticker.toLowerCase();
   var lowercaseBase = base.toLowerCase();
@@ -24,14 +27,22 @@ function FHPRICE(ticker, base = "usd") {
   }
   console.log(ticker, base, "cache miss");
 
-  var response = UrlFetchApp.fetch(`https://farmhand-xebhza4nba-ew.a.run.app/coin/${lowercaseTicker}/price`);
-  var price = JSON.parse(response.getContentText());
+  var options = {
+    'method' : 'post',
+    'contentType': 'application/json',
+    'payload' : JSON.stringify({
+       base: lowercaseBase,
+    })
+  };
+  var response = UrlFetchApp.fetch(`https://farmhand.dev/coin/${lowercaseTicker}/price`, options);
+  if (response.getResponseCode() === 404) {
+    return "N/A"
+  }
+  var { price } = JSON.parse(response.getContentText());
 
-  cache.put(`price-${lowercaseTicker}-usd`, price.usd, 3600);
-  cache.put(`price-${lowercaseTicker}-btc`, price.btc, 3600);
-  cache.put(`price-${lowercaseTicker}-eth`, price.eth, 3600);
+  cache.put(`price-${lowercaseTicker}-${lowercaseBase}`, price, 3600);
 
-  return Number(price[lowercaseBase]);
+  return Number(price);
 }
 
 /**
@@ -49,6 +60,9 @@ function FHCHANGE(ticker, daysAgo = 1, base = "usd") {
   if (ticker === undefined) {
     throw new Error("need a ticker to quote")
   }
+  if (typeof ticker !== "string") {
+    throw new Error("ticker should be text")
+  }
 
   var lowercaseTicker = ticker.toLowerCase();
   var lowercaseBase = base.toLowerCase();
@@ -59,12 +73,21 @@ function FHCHANGE(ticker, daysAgo = 1, base = "usd") {
     return Number(cached);
   }
 
-  var response = UrlFetchApp.fetch(`https://farmhand-xebhza4nba-ew.a.run.app/coin/${lowercaseTicker}/price-change/${daysAgo}`);
-  var priceChange = JSON.parse(response.getContentText());
+  var options = {
+    'method' : 'post',
+    'contentType': 'application/json',
+    'payload' : JSON.stringify({
+       base: lowercaseBase,
+       daysAgo,
+    })
+  };
+  var response = UrlFetchApp.fetch(`https://farmhand.dev/coin/${lowercaseTicker}/price-change/`, options);
+  if (response.getResponseCode() === 404) {
+    return "N/A"
+  }
+  var { priceChange } = JSON.parse(response.getContentText());
 
-  cache.put(`priceChange-${lowercaseTicker}-${daysAgo}-usd`, priceChange.usd, 3600);
-  cache.put(`priceChange-${lowercaseTicker}-${daysAgo}-btc`, priceChange.btc, 3600);
-  cache.put(`priceChange-${lowercaseTicker}-${daysAgo}-eth`, priceChange.eth, 3600);
+  cache.put(`priceChange-${lowercaseTicker}-${daysAgo}-${lowercaseBase}`, priceChange, 3600);
 
-  return Number(priceChange[lowercaseBase]);
+  return Number(priceChange);
 }

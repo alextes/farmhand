@@ -3,36 +3,38 @@ import { RouteParams } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { LRU, pipe, TE } from "./deps.ts";
 import { BadResponse, DecodeError, FetchError } from "./errors.ts";
 import * as Id from "./id.ts";
+import * as PriceChange from "./price_change.ts";
 import { GetIdError } from "./id.ts";
 import { State } from "./server.ts";
+import { HistoricPriceCache } from "./price_change.ts";
 
-export type PriceCache = LRU<MultiPrice>;
+export type PriceCache = LRU<number>;
 
 /**
- * Structure CoinGecko uses in simple price responses
+ * Structure CoinGecko uses in simple price responses.
  */
 type RawPrice = Record<string, MultiPrice>;
 
-export type MultiPrice = {
-  usd: number;
-  btc: number;
-  eth: number;
-};
+// where keys are the base denominations we asked for.
+export type MultiPrice = Record<string, number>;
 
 type FetchMultiPriceError = FetchError | DecodeError | BadResponse;
+export type Base = "usd" | "btc" | "eth";
 
-const fetchMultiPrice = (
+const getPrice = (
   priceCache: PriceCache,
+  historicPriceCache: HistoricPriceCache,
   id: string,
-): TE.TaskEither<FetchMultiPriceError, MultiPrice> => {
-  const cacheKey = `price-${id}`;
+  base: Base,
+): TE.TaskEither<FetchMultiPriceError, number> => {
+  const cacheKey = `price-${id}-${base}`;
   const cValue = priceCache.get(cacheKey);
   if (cValue !== undefined) {
     return TE.right(cValue);
   }
 
   const uri =
-    `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd%2Cbtc%2Ceth`;
+    `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=${base}`;
 
   return pipe(
     () => fetch(uri),
@@ -41,6 +43,15 @@ const fetchMultiPrice = (
     }),
     TE.chain((res): TE.TaskEither<FetchMultiPriceError, RawPrice> => {
       if (res.status === 429) {
+        // If we have shot too many price requests already, fallback to todays
+        // cached price.
+        const todayTimestamp = PriceChange.getTodayTimestamp();
+        const key = `${todayTimestamp}-${id}-${base}`;
+        const price = historicPriceCache.get(key);
+        if (price !== undefined) {
+          return TE.right({ [id]: { [base]: price } });
+        }
+
         return TE.left({
           type: "BadResponse",
           error: new Error("Hit CoinGecko API rate limit"),
@@ -66,22 +77,37 @@ const fetchMultiPrice = (
       );
     }),
     TE.map((rawPrice) => {
-      const multiPrice = rawPrice[id];
-      priceCache.set(cacheKey, multiPrice);
-      return multiPrice;
+      const price = rawPrice[id][base];
+      priceCache.set(cacheKey, price);
+      return price;
     }),
   );
 };
 
 type GetPriceError = GetIdError | FetchMultiPriceError;
 
-export const handleGetPrice = (
+export const handleGetPrice = async (
   ctx: RouterContext<RouteParams, State>,
-): Promise<void> => (
-  pipe(
+): Promise<void> => {
+  if (!ctx.request.hasBody) {
+    ctx.response.status = 400;
+    ctx.response.body = { msg: "missing request parameters" };
+    return;
+  }
+
+  const result = ctx.request.body({ type: "json" });
+  type Body = { base: Base };
+  const { base }: Body = await result.value;
+
+  return pipe(
     Id.getIdBySymbol(ctx.app.state.idMapCache, ctx.params.symbol!),
-    TE.chain((id): TE.TaskEither<GetPriceError, MultiPrice> => (
-      fetchMultiPrice(ctx.app.state.priceCache, id)
+    TE.chain((id): TE.TaskEither<GetPriceError, number> => (
+      getPrice(
+        ctx.app.state.priceCache,
+        ctx.app.state.historicPriceCache,
+        id,
+        base,
+      )
     )),
     TE.bimap((cError): undefined => {
       const { error } = cError;
@@ -101,10 +127,10 @@ export const handleGetPrice = (
           ctx.response.body = { msg: error.message };
           return;
       }
-    }, (multiPrice) => {
-      ctx.response.body = multiPrice;
+    }, (price) => {
+      ctx.response.body = { price };
       return undefined;
     }),
     (te) => te().then(() => undefined),
-  )
-);
+  );
+};

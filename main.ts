@@ -10,7 +10,7 @@ const idMapCache = new LRU({ capacity: 1, stdTTL: fourHoursInMilis });
 idMapCache.set(Id.idMapKey, M.empty());
 const app = makeApp({
   idMapCache,
-  priceCache: new LRU({ capacity: 200, stdTTL: oneHourInMs }),
+  priceCache: new LRU({ capacity: 1000, stdTTL: oneHourInMs }),
   historicPriceCache: new LRU({ capacity: 100000 }),
 });
 await app.listen({ hostname, port: 8080 });

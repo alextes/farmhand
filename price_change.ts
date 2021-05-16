@@ -133,6 +133,13 @@ const getHistoricPrice = (
   );
 };
 
+export const getTodayTimestamp = () =>
+  pipe(
+    new Date(Date.now()),
+    startOfDay,
+    getUnixTime,
+  );
+
 const getPriceChange = (
   historicPriceCache: HistoricPriceCache,
   id: string,
@@ -142,11 +149,7 @@ const getPriceChange = (
   pipe(
     getHistoricPrice(historicPriceCache, id, base, daysAgo),
     TE.chain((historicPrice) => {
-      const todayTimestamp = pipe(
-        new Date(Date.now()),
-        startOfDay,
-        getUnixTime,
-      );
+      const todayTimestamp = getTodayTimestamp();
       const key = `${todayTimestamp}-${id}-${base}`;
       const todayPrice = historicPriceCache.get(key);
 

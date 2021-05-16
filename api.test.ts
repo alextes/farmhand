@@ -3,7 +3,6 @@ import { getFreePort } from "https://deno.land/x/free_port@v1.2.0/mod.ts";
 import * as Id from "./id.ts";
 import { E, LRU, M, pipe, T } from "./deps.ts";
 import { makeApp } from "./server.ts";
-import { MultiPrice } from "./price.ts";
 
 // We use a global cache with TTL timers. As we don't clear the timers we leak
 // async ops. Deno tests notices this, judges our test dangerously
@@ -26,8 +25,6 @@ const getOrThrow = <A>(e: E.Either<unknown, A>) => {
   }
 };
 
-const getJson = <A>(url: string): Promise<A> =>
-  fetch(url).then((res) => res.json());
 const postJson = <A>(url: string, body: Record<string, unknown>): Promise<A> =>
   fetch(
     url,
@@ -53,12 +50,11 @@ Deno.test("returns price", async () => {
   const { signal } = controller;
   const listenP = app.listen({ hostname: "localhost", port, signal });
 
-  const multiPrice = await getJson<MultiPrice>(
+  const { price } = await postJson<{ price: number }>(
     `http://localhost:${port}/coin/btc/price`,
+    { base: "usd" },
   );
-  assertEquals(typeof multiPrice.usd, "number");
-  assertEquals(typeof multiPrice.btc, "number");
-  assertEquals(typeof multiPrice.eth, "number");
+  assertEquals(typeof price, "number");
 
   controller.abort();
   await listenP;
