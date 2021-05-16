@@ -15,7 +15,7 @@ type IdFetchError = BadResponse | DecodeError | FetchError;
 type UnknownSymbol = { type: "UnknownSymbol"; error: Error };
 export type GetIdError = IdFetchError | UnknownSymbol;
 
-const idMapKey = "id-map-key";
+export const idMapKey = "id-map-key";
 
 export const fetchCoinGeckoIdMap = (
   cache: IdMapCache,

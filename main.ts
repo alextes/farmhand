@@ -1,12 +1,13 @@
 import { LRU, M } from "./deps.ts";
 import { milisFromHours } from "./duration.ts";
 import { makeApp } from "./server.ts";
+import * as Id from "./id.ts";
 
 const hostname = Deno.env.get("ENV") === "dev" ? "localhost" : "0.0.0.0";
 const oneHourInMs = milisFromHours(1);
 const fourHoursInMilis = milisFromHours(4);
 const idMapCache = new LRU({ capacity: 1, stdTTL: fourHoursInMilis });
-idMapCache.set("id-map-key", M.empty);
+idMapCache.set(Id.idMapKey, M.empty());
 const app = makeApp({
   idMapCache,
   priceCache: new LRU({ capacity: 200, stdTTL: oneHourInMs }),

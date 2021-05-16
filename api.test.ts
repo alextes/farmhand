@@ -10,7 +10,7 @@ import { MultiPrice } from "./price.ts";
 // non-deterministic, and fails the test. Therefore we mock the cache.
 
 const mockIdMapCache = new LRU({ capacity: 1 });
-mockIdMapCache.set("id-map-key", M.empty());
+mockIdMapCache.set(Id.idMapKey, M.empty());
 
 const app = makeApp({
   idMapCache: mockIdMapCache,
