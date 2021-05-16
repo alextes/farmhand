@@ -60,6 +60,12 @@ export const fetchCoinGeckoIdMap = (
   )
 );
 
+const overrides: Record<string, string> = {
+  "uni": "uniswap",
+  "ftt": "ftx-token",
+  "comp": "compound",
+};
+
 export const getIdBySymbol = (
   idMapCache: IdMapCache,
   symbol: string,
@@ -67,12 +73,8 @@ export const getIdBySymbol = (
   const cValue = idMapCache.get(idMapKey)!.get(symbol);
   if (cValue !== undefined) {
     // Same problem as below but now we cached the ids.
-    if (symbol === "uni") {
-      return TE.right("uniswap");
-    }
-
-    if (symbol === "ftt") {
-      return TE.right("ftx-token");
+    if (Object.keys(overrides).includes(symbol)) {
+      return TE.right(overrides[symbol]);
     }
 
     return TE.right(cValue[0]);
@@ -86,12 +88,8 @@ export const getIdBySymbol = (
       // would be the wrong one. As a workaround we return the more likely id
       // here.
 
-      if (symbol === "uni") {
-        return TE.right("uniswap");
-      }
-
-      if (symbol === "ftt") {
-        return TE.right("ftx-token");
+      if (Object.keys(overrides).includes(symbol)) {
+        return TE.right(overrides[symbol]);
       }
 
       const mIds = idMap.get(symbol);
