@@ -66,6 +66,15 @@ export const getIdBySymbol = (
 ): TE.TaskEither<GetIdError, string> => {
   const cValue = idMapCache.get(idMapKey)!.get(symbol);
   if (cValue !== undefined) {
+    // Same problem as below but now we cached the ids.
+    if (symbol === "uni") {
+      return TE.right("uniswap");
+    }
+
+    if (symbol === "ftt") {
+      return TE.right("ftx-token");
+    }
+
     return TE.right(cValue[0]);
   }
 
