@@ -13,7 +13,7 @@ mockIdMapCache.set(Id.idMapKey, M.empty());
 
 const app = makeApp({
   idMapCache: mockIdMapCache,
-  priceCache: new LRU({ capacity: 0 }),
+  priceCache: new LRU({ capacity: 1 }),
   historicPriceCache: new LRU({ capacity: 0 }),
 });
 
@@ -35,6 +35,20 @@ const postJson = <A>(url: string, body: Record<string, unknown>): Promise<A> =>
     },
   ).then((res) => res.json());
 
+const makeServer = async (): Promise<[() => Promise<void>, number]> => {
+  const port = await getFreePort(8080);
+  const controller = new AbortController();
+  const { signal } = controller;
+  const listening = app.listen({ hostname: "localhost", port, signal });
+
+  const stopListening = () => {
+    controller.abort();
+    return listening;
+  };
+
+  return [stopListening, port];
+};
+
 Deno.test("gets an id by symbol", () =>
   pipe(
     Id.getIdBySymbol(mockIdMapCache, "eth"),
@@ -45,26 +59,20 @@ Deno.test("gets an id by symbol", () =>
   )());
 
 Deno.test("returns price", async () => {
-  const port = await getFreePort(8080);
-  const controller = new AbortController();
-  const { signal } = controller;
-  const listenP = app.listen({ hostname: "localhost", port, signal });
+  const [stopListening, port] = await makeServer();
 
   const { price } = await postJson<{ price: number }>(
     `http://localhost:${port}/coin/btc/price`,
     { base: "usd" },
   );
+
   assertEquals(typeof price, "number");
 
-  controller.abort();
-  await listenP;
+  await stopListening();
 });
 
 Deno.test("returns price change", async () => {
-  const port = await getFreePort(8080);
-  const controller = new AbortController();
-  const { signal } = controller;
-  const listenP = app.listen({ hostname: "localhost", port, signal });
+  const [stopListening, port] = await makeServer();
 
   const { priceChange } = await postJson(
     `http://localhost:${port}/coin/btc/price-change/`,
@@ -76,6 +84,35 @@ Deno.test("returns price change", async () => {
 
   assertEquals(typeof priceChange, "number");
 
-  controller.abort();
-  await listenP;
+  await stopListening();
+});
+
+Deno.test("uses the override successfully", async () => {
+  const [stopListening, port] = await makeServer();
+
+  const { price } = await postJson<{ price: number }>(
+    `http://localhost:${port}/coin/btc/price`,
+    { base: "usd" },
+  );
+
+  assertEquals(typeof price, "number");
+
+  await stopListening();
+});
+
+Deno.test("returns a price from cache without issues", async () => {
+  const [stopListening, port] = await makeServer();
+
+  await postJson<{ price: number }>(
+    `http://localhost:${port}/coin/eth/price`,
+    { base: "usd" },
+  );
+  const { price } = await postJson<{ price: number }>(
+    `http://localhost:${port}/coin/eth/price`,
+    { base: "usd" },
+  );
+
+  assertEquals(typeof price, "number");
+
+  await stopListening();
 });
