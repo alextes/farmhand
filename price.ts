@@ -1,6 +1,6 @@
 import { RouterContext } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { RouteParams } from "https://deno.land/x/oak@v7.3.0/mod.ts";
-import { LRU, pipe, TE } from "./deps.ts";
+import { E, LRU, pipe, TE } from "./deps.ts";
 import { BadResponse, DecodeError, FetchError } from "./errors.ts";
 import * as Id from "./id.ts";
 import * as PriceChange from "./price_change.ts";
@@ -18,21 +18,21 @@ type RawPrice = Record<string, MultiPrice>;
 // where keys are the base denominations we asked for.
 export type MultiPrice = Record<string, number>;
 
-type FetchMultiPriceError = FetchError | DecodeError | BadResponse;
+type NotFound = { type: "NotFound"; error: Error };
+type FetchPriceError =
+  | GetIdError
+  | FetchError
+  | DecodeError
+  | BadResponse
+  | NotFound;
+
 export type Base = "usd" | "btc" | "eth";
 
-const getPrice = (
-  priceCache: PriceCache,
+const fetchPrice = (
   historicPriceCache: HistoricPriceCache,
   id: string,
   base: Base,
-): TE.TaskEither<FetchMultiPriceError, number> => {
-  const cacheKey = `price-${id}-${base}`;
-  const cValue = priceCache.get(cacheKey);
-  if (cValue !== undefined) {
-    return TE.right(cValue);
-  }
-
+): TE.TaskEither<FetchPriceError, number> => {
   const uri =
     `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=${base}`;
 
@@ -41,7 +41,7 @@ const getPrice = (
     TE.fromFailableTask((error) => {
       return ({ type: "FetchError" as const, error: error as Error });
     }),
-    TE.chain((res): TE.TaskEither<FetchMultiPriceError, RawPrice> => {
+    TE.chain((res): TE.TaskEither<FetchPriceError, number> => {
       if (res.status === 429) {
         // If we have shot too many price requests already, fallback to todays
         // cached price.
@@ -49,7 +49,7 @@ const getPrice = (
         const key = `${todayTimestamp}-${id}-${base}`;
         const price = historicPriceCache.get(key);
         if (price !== undefined) {
-          return TE.right({ [id]: { [base]: price } });
+          return TE.right(price);
         }
 
         return TE.left({
@@ -71,20 +71,43 @@ const getPrice = (
 
       return pipe(
         () => res.json() as Promise<RawPrice>,
-        TE.fromFailableTask((error) => (
+        TE.fromFailableTask((error): FetchPriceError => (
           ({ type: "DecodeError", error: error as Error })
         )),
+        TE.chain((rawPrice): TE.TaskEither<FetchPriceError, number> => {
+          if (Object.keys(rawPrice).length === 0) {
+            return TE.left({
+              type: "NotFound",
+              error: new Error(`no price found for valid identifier ${id}`),
+            });
+          }
+
+          return TE.right(rawPrice[id][base]);
+        }),
       );
     }),
-    TE.map((rawPrice) => {
-      const price = rawPrice[id][base];
+  );
+};
+
+const getPrice = (
+  priceCache: PriceCache,
+  historicPriceCache: HistoricPriceCache,
+  id: string,
+  base: Base,
+) => {
+  const cacheKey = `price-${id}-${base}`;
+  return pipe(
+    priceCache.get(cacheKey),
+    (mPrice) =>
+      typeof mPrice === "number"
+        ? TE.right(mPrice)
+        : fetchPrice(historicPriceCache, id, base),
+    TE.map((price) => {
       priceCache.set(cacheKey, price);
       return price;
     }),
   );
 };
-
-type GetPriceError = GetIdError | FetchMultiPriceError;
 
 export const handleGetPrice = async (
   ctx: RouterContext<RouteParams, State>,
@@ -99,9 +122,9 @@ export const handleGetPrice = async (
   type Body = { base: Base };
   const { base }: Body = await result.value;
 
-  return pipe(
+  const ePrice = await pipe(
     Id.getIdBySymbol(ctx.app.state.idMapCache, ctx.params.symbol!),
-    TE.chain((id): TE.TaskEither<GetPriceError, number> => (
+    TE.chain((id) => (
       getPrice(
         ctx.app.state.priceCache,
         ctx.app.state.historicPriceCache,
@@ -109,28 +132,33 @@ export const handleGetPrice = async (
         base,
       )
     )),
-    TE.bimap((cError): undefined => {
-      const { error } = cError;
-      console.error(error);
+  )();
 
-      switch (cError.type) {
-        case "FetchError":
-          ctx.response.status = 500;
-          return;
-        case "BadResponse":
-          ctx.response.status = cError.status;
-          ctx.response.body = { msg: error.message };
-          return;
-        case "DecodeError":
-        case "UnknownSymbol":
-          ctx.response.status = 500;
-          ctx.response.body = { msg: error.message };
-          return;
-      }
-    }, (price) => {
-      ctx.response.body = { price };
-      return undefined;
-    }),
-    (te) => te().then(() => undefined),
+  return pipe(
+    ePrice,
+    E.fold(
+      (priceError) => {
+        const { error } = priceError;
+        console.error(error);
+
+        switch (priceError.type) {
+          case "FetchError":
+            ctx.response.status = 500;
+            return;
+          case "BadResponse":
+            ctx.response.status = priceError.status;
+            ctx.response.body = { msg: error.message };
+            return;
+          case "DecodeError":
+          case "UnknownSymbol":
+            ctx.response.status = 500;
+            ctx.response.body = { msg: error.message };
+            return;
+        }
+      },
+      (price) => {
+        ctx.response.body = { price };
+      },
+    ),
   );
 };
