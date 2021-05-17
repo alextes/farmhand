@@ -63,7 +63,7 @@ export const fetchCoinGeckoIdMap = (
 const overrides: Record<string, string> = {
   "uni": "uniswap",
   "ftt": "ftx-token",
-  "comp": "compound",
+  "comp": "compound-governance-token",
 };
 
 export const getIdBySymbol = (
