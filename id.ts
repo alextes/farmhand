@@ -70,7 +70,13 @@ export const getIdBySymbol = (
   idMapCache: IdMapCache,
   symbol: string,
 ): TE.TaskEither<GetIdError, string> => {
-  const cValue = idMapCache.get(idMapKey)!.get(symbol);
+  let mIdMap = idMapCache.get(idMapKey);
+  if (mIdMap === undefined) {
+    // When the TTL of the IdMap expires we need to reinitialize.
+    mIdMap = M.empty();
+    idMapCache.set(idMapKey, mIdMap);
+  }
+  const cValue = mIdMap.get(symbol);
   if (cValue !== undefined) {
     // Same problem as below but now we cached the ids.
     if (Object.keys(overrides).includes(symbol)) {
