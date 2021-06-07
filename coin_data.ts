@@ -23,7 +23,7 @@ export const handleGetCoinData = async (
     ...[string, number, number, number, number, number, number][],
   ] = [
     [
-      "name",
+      "token",
       "price",
       "1d change",
       "7d change",
