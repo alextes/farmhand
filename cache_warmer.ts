@@ -51,7 +51,7 @@ const commonSymbols = [
   "wasabi",
   "white",
   "woo",
-  "Xsushi",
+  "xsushi",
   "yfi",
   "yve-crvdao",
 ];
@@ -83,6 +83,8 @@ export const warmUpCache = async (
       PriceChange.getPriceChange(historicPriceCache, id, "btc", 180),
       T.map(getOrThrow),
     )();
+
+    console.log("warmed cache for", symbol);
 
     await new Promise((resolve) => {
       setTimeout(resolve, 2000);
