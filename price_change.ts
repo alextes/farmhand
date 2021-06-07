@@ -140,7 +140,7 @@ export const getTodayTimestamp = () =>
     getUnixTime,
   );
 
-const getPriceChange = (
+export const getPriceChange = (
   historicPriceCache: HistoricPriceCache,
   id: string,
   base: Base,

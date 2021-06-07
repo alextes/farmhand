@@ -1,3 +1,4 @@
+import { handleGetCoinData } from "./coin_data.ts";
 import { Application, Context, Router } from "./deps.ts";
 import { IdMapCache } from "./id.ts";
 import { handleGetPrice, PriceCache } from "./price.ts";
@@ -47,6 +48,8 @@ export const makeApp = (state: State) => {
   router.post("/coin/:symbol/price", handleGetPrice);
 
   router.post("/coin/:symbol/price-change", handleGetPriceChange);
+
+  router.post("/coin-data", handleGetCoinData);
 
   app.use(router.routes());
 

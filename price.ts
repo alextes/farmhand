@@ -7,13 +7,14 @@ import * as PriceChange from "./price_change.ts";
 import { GetIdError } from "./id.ts";
 import { State } from "./server.ts";
 import { HistoricPriceCache } from "./price_change.ts";
+import { Base } from "./base_unit.ts";
 
 export type PriceCache = LRU<number>;
 
 /**
  * Structure CoinGecko uses in simple price responses.
  */
-type RawPrice = Record<string, MultiPrice>;
+type RawPrices = Record<string, MultiPrice>;
 
 // where keys are the base denominations we asked for.
 export type MultiPrice = Record<string, number>;
@@ -26,30 +27,38 @@ type FetchPriceError =
   | BadResponse
   | NotFound;
 
-export type Base = "usd" | "btc" | "eth";
-
-const fetchPrice = (
+const fetchPrices = (
   historicPriceCache: HistoricPriceCache,
-  id: string,
+  ids: string[],
   base: Base,
-): TE.TaskEither<FetchPriceError, number> => {
-  const uri =
-    `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=${base}`;
+): TE.TaskEither<FetchPriceError, Record<string, number>> => {
+  const uri = `https://api.coingecko.com/api/v3/simple/price?ids=${
+    ids.join(",")
+  }&vs_currencies=${base}`;
 
   return pipe(
     () => fetch(uri),
-    TE.fromFailableTask((error) => {
-      return ({ type: "FetchError" as const, error: error as Error });
-    }),
-    TE.chain((res): TE.TaskEither<FetchPriceError, number> => {
+    TE.fromFailableTask((error) => ({
+      type: "FetchError" as const,
+      error: error as Error,
+    })),
+    TE.chain((res): TE.TaskEither<FetchPriceError, Record<string, number>> => {
       if (res.status === 429) {
         // If we have shot too many price requests already, fallback to todays
         // cached price.
         const todayTimestamp = PriceChange.getTodayTimestamp();
-        const key = `${todayTimestamp}-${id}-${base}`;
-        const price = historicPriceCache.get(key);
-        if (price !== undefined) {
-          return TE.right(price);
+        const prices = ids.reduce((map, id) => {
+          const key = `${todayTimestamp}-${id}-${base}`;
+          const price = historicPriceCache.get(key);
+          if (price !== undefined) {
+            map[id] = price;
+          }
+          return map;
+        }, {} as Record<string, number>);
+
+        if (Object.keys(prices).length === ids.length) {
+          // We had all prices in historic cache.
+          return TE.right(prices);
         }
 
         return TE.left({
@@ -70,38 +79,80 @@ const fetchPrice = (
       }
 
       return pipe(
-        () => res.json() as Promise<RawPrice>,
+        () => res.json() as Promise<RawPrices>,
         TE.fromFailableTask((error): FetchPriceError => (
           ({ type: "DecodeError", error: error as Error })
         )),
-        TE.chain((rawPrice): TE.TaskEither<FetchPriceError, number> => {
-          if (Object.keys(rawPrice).length === 0) {
-            return TE.left({
-              type: "NotFound",
-              error: new Error(`no price found for valid identifier ${id}`),
-            });
-          }
+        TE.chain(
+          (
+            rawPrices,
+          ): TE.TaskEither<FetchPriceError, Record<string, number>> => {
+            if (Object.keys(rawPrices).length === 0) {
+              return TE.left({
+                type: "NotFound",
+                error: new Error(`no price found for valid identifier ${ids}`),
+              });
+            }
 
-          return TE.right(rawPrice[id][base]);
-        }),
+            const prices = ids.reduce((map, id) => {
+              map[id] = rawPrices[id][base];
+              return map;
+            }, {} as Record<string, number>);
+
+            return TE.right(prices);
+          },
+        ),
       );
     }),
   );
 };
 
-const getPrice = (
+export const getPrices = (
+  priceCache: PriceCache,
+  historicPriceCache: HistoricPriceCache,
+  ids: readonly string[],
+  base: Base,
+): TE.TaskEither<FetchPriceError, Record<string, number>> => {
+  const cachedPrices: Record<string, number> = {};
+  const pricesToFetch: string[] = [];
+
+  ids.forEach((id) => {
+    const cacheKey = `price-${id}-${base}`;
+    const cPrice = priceCache.get(cacheKey);
+    if (cPrice !== undefined) {
+      cachedPrices[id] = cPrice;
+    }
+
+    pricesToFetch.push(id);
+  });
+
+  return pipe(
+    fetchPrices(historicPriceCache, pricesToFetch, base),
+    TE.map((prices) => {
+      // Store newly fetched prices in cache
+      Object.entries(prices).forEach(([id, price]) => {
+        priceCache.set(id, price);
+      });
+
+      return { ...cachedPrices, ...prices };
+    }),
+  );
+};
+
+export const getPrice = (
   priceCache: PriceCache,
   historicPriceCache: HistoricPriceCache,
   id: string,
   base: Base,
-) => {
+): TE.TaskEither<FetchPriceError, number> => {
   const cacheKey = `price-${id}-${base}`;
   return pipe(
     priceCache.get(cacheKey),
     (mPrice) =>
-      typeof mPrice === "number"
-        ? TE.right(mPrice)
-        : fetchPrice(historicPriceCache, id, base),
+      typeof mPrice === "number" ? TE.right(mPrice) : pipe(
+        fetchPrices(historicPriceCache, [id], base),
+        TE.map((prices) => prices[id]),
+      ),
     TE.map((price) => {
       priceCache.set(cacheKey, price);
       return price;

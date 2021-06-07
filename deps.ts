@@ -14,4 +14,8 @@ export * as O from "https://deno.land/x/fun@v1.0.0/option.ts";
 export * as T from "https://deno.land/x/fun@v1.0.0/task.ts";
 export * as TE from "https://deno.land/x/fun@v1.0.0/task_either.ts";
 export * as M from "https://deno.land/x/fun@v1.0.0/map.ts";
-export { pipe } from "https://deno.land/x/fun@v1.0.0/fns.ts";
+export { flow, pipe } from "https://deno.land/x/fun@v1.0.0/fns.ts";
+export type {
+  RouteParams,
+  RouterContext,
+} from "https://deno.land/x/oak@v7.3.0/mod.ts";
