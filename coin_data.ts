@@ -15,8 +15,7 @@ export const handleGetCoinData = async (
   }
 
   const result = ctx.request.body({ type: "json" });
-  type Body = { coins: string[] };
-  const { coins }: Body = await result.value;
+  const coins: string[] = await result.value;
 
   const coinData: [
     string[],
