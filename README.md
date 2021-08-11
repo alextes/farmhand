@@ -38,4 +38,4 @@ We'd like to not hit the CoinGecko API for every requested price. We therefore i
 
 - The full list of tickers is cached for 4 hours.
 - A simple price is cached for 60 minutes.
-- A historic price is cached indefinitely, meaning for a given day is the past, the same price change is returned until a new day begins.
+- A historic price is cached indefinitely, meaning for a given day in the past, the same price change is returned until a new day begins.
