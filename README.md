@@ -22,6 +22,9 @@ jgs `'-._|_|;:;_.-'` '::.  `"-
  .:;.      .:.   ::.     '::.
 ```
 
+## Usage
+Add `farmhand.gs` to a sheet using tools -> script editor. Use `FHPRICE`, `FHCHANGE`, `FHCOINS` to get coin data.
+
 ## Ideas
 
 - Simple APY is an extrapolation of earnings since start. In other words, take the value at t=0, take the value at t=now, and draw a line through both points to t=1y. We probably get a more accurate prediction by including data of each days value, i.e. a trend line.
