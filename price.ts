@@ -123,7 +123,7 @@ const fetchPrices = (
   );
 };
 
-const getPrices = (
+export const getPrices = (
   priceCache: PriceCache,
   historicPriceCache: HistoricPriceCache,
   ids: readonly string[],
