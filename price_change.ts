@@ -48,7 +48,7 @@ const startOfDay = (date: Date): Date => {
 const getHistoricPriceQueue = new PQueue({
   // We set concurrency to 1 for max cache use.
   concurrency: 1,
-  interval: 60,
+  interval: 60000,
   intervalCap: 25,
 });
 
