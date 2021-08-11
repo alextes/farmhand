@@ -2,7 +2,7 @@ export {
   Application,
   Context,
   Router,
-} from "https://deno.land/x/oak@v7.3.0/mod.ts";
+} from "https://deno.land/x/oak@v8.0.0/mod.ts";
 export { LRU } from "https://deno.land/x/velo@0.1.5/mod.ts";
 export {
   getUnixTime,
@@ -16,6 +16,8 @@ export * as TE from "https://deno.land/x/fun@v1.0.0/task_either.ts";
 export * as M from "https://deno.land/x/fun@v1.0.0/map.ts";
 export { flow, pipe } from "https://deno.land/x/fun@v1.0.0/fns.ts";
 export type {
+  Middleware,
   RouteParams,
   RouterContext,
-} from "https://deno.land/x/oak@v7.3.0/mod.ts";
+  RouterMiddleware,
+} from "https://deno.land/x/oak@v8.0.0/mod.ts";

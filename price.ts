@@ -1,13 +1,11 @@
-import { RouterContext } from "https://deno.land/x/oak@v7.3.0/mod.ts";
-import { RouteParams } from "https://deno.land/x/oak@v7.3.0/mod.ts";
-import { E, LRU, pipe, TE } from "./deps.ts";
+import { E, LRU, pipe, RouteParams, RouterMiddleware, TE } from "./deps.ts";
 import { BadResponse, DecodeError, FetchError } from "./errors.ts";
 import * as Id from "./id.ts";
 import * as PriceChange from "./price_change.ts";
 import { GetIdError } from "./id.ts";
-import { State } from "./server.ts";
 import { HistoricPriceCache } from "./price_change.ts";
 import { Base } from "./base_unit.ts";
+import { State } from "./server.ts";
 
 export type PriceCache = LRU<number>;
 
@@ -160,8 +158,8 @@ export const getPrice = (
   );
 };
 
-export const handleGetPrice = async (
-  ctx: RouterContext<RouteParams, State>,
+export const handleGetPrice: RouterMiddleware<RouteParams, State> = async (
+  ctx,
 ): Promise<void> => {
   if (!ctx.request.hasBody) {
     ctx.response.status = 400;

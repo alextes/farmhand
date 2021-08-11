@@ -1,12 +1,12 @@
-import { A, E, pipe, RouteParams, RouterContext, T, TE } from "./deps.ts";
+import { A, E, pipe, RouteParams, RouterMiddleware, T, TE } from "./deps.ts";
 import * as Id from "./id.ts";
 import { State } from "./server.ts";
 import * as Price from "./price.ts";
 import * as PriceChange from "./price_change.ts";
 import { Base } from "./base_unit.ts";
 
-export const handleGetCoinData = async (
-  ctx: RouterContext<RouteParams, State>,
+export const handleGetCoinData: RouterMiddleware<RouteParams, State> = async (
+  ctx,
 ): Promise<void> => {
   if (!ctx.request.hasBody) {
     ctx.response.status = 400;

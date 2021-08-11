@@ -1,12 +1,12 @@
 import { handleGetCoinData } from "./coin_data.ts";
-import { Application, Context, Router } from "./deps.ts";
+import { Application, Middleware, Router } from "./deps.ts";
 import { IdMapCache } from "./id.ts";
 import { handleGetPrice, PriceCache } from "./price.ts";
 import { handleGetPriceChange, HistoricPriceCache } from "./price_change.ts";
 
-const handleError = async (
-  context: Context,
-  next: () => Promise<void>,
+const handleError: Middleware = async (
+  context,
+  next,
 ) => {
   try {
     await next();

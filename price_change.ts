@@ -1,7 +1,14 @@
-import { RouterContext } from "https://deno.land/x/oak@v7.3.0/mod.ts";
-import { RouteParams } from "https://deno.land/x/oak@v7.3.0/mod.ts";
 import { Base } from "./base_unit.ts";
-import { getUnixTime, LRU, O, pipe, subDays, TE } from "./deps.ts";
+import {
+  getUnixTime,
+  LRU,
+  O,
+  pipe,
+  RouteParams,
+  RouterMiddleware,
+  subDays,
+  TE,
+} from "./deps.ts";
 import * as Id from "./id.ts";
 import * as A from "https://deno.land/x/fun@v1.0.0/array.ts";
 import { State } from "./server.ts";
@@ -164,60 +171,61 @@ export const getPriceChange = (
 
 type PriceChangeError = GetIdError | GetHistoricPriceError;
 
-export const handleGetPriceChange = async (
-  ctx: RouterContext<RouteParams, State>,
-): Promise<void> => {
-  const symbol = ctx.params.symbol!;
-  if (!ctx.request.hasBody) {
-    ctx.response.status = 400;
-    ctx.response.body = { msg: "missing request parameters" };
-    return;
-  }
+export const handleGetPriceChange: RouterMiddleware<RouteParams, State> =
+  async (
+    ctx,
+  ): Promise<void> => {
+    const symbol = ctx.params.symbol!;
+    if (!ctx.request.hasBody) {
+      ctx.response.status = 400;
+      ctx.response.body = { msg: "missing request parameters" };
+      return;
+    }
 
-  const result = ctx.request.body({ type: "json" });
-  type Body = { base: Base; daysAgo: number };
-  const { base, daysAgo }: Body = await result.value;
+    const result = ctx.request.body({ type: "json" });
+    type Body = { base: Base; daysAgo: number };
+    const { base, daysAgo }: Body = await result.value;
 
-  return pipe(
-    Id.getIdBySymbol(ctx.app.state.idMapCache, symbol),
-    TE.widen<PriceChangeError>(),
-    TE.chain((id): TE.TaskEither<PriceChangeError, number> =>
-      getPriceChange(ctx.app.state.historicPriceCache, id, base, daysAgo)
-    ),
-    TE.mapLeft((error) => {
-      switch (error.type) {
-        case "UnknownSymbol":
-          ctx.response.status = 404;
-          ctx.response.body = {
-            msg: `no coingecko symbol ticker found for ${symbol}`,
-          };
-          return undefined;
-        case "FetchError":
-        case "DecodeError":
-          ctx.response.status = 404;
-          ctx.response.body = {
-            msg: `no coingecko symbol ticker found for ${symbol}`,
-          };
-          return undefined;
-        case "BadResponse":
-          ctx.response.status = error.status;
-          ctx.response.body = {
-            msg: error.error.message,
-          };
-          return undefined;
-        case "NoHistoricPrice":
-          ctx.response.status = 404;
-          ctx.response.body = {
-            msg: `no historic price found for ${symbol}, ${daysAgo} days ago`,
-          };
-          return undefined;
-      }
-    }),
-    TE.map(
-      (priceChange) => {
-        ctx.response.body = { priceChange };
-      },
-    ),
-    ((a) => a().then(undefined)),
-  );
-};
+    return pipe(
+      Id.getIdBySymbol(ctx.app.state.idMapCache, symbol),
+      TE.widen<PriceChangeError>(),
+      TE.chain((id): TE.TaskEither<PriceChangeError, number> =>
+        getPriceChange(ctx.app.state.historicPriceCache, id, base, daysAgo)
+      ),
+      TE.mapLeft((error) => {
+        switch (error.type) {
+          case "UnknownSymbol":
+            ctx.response.status = 404;
+            ctx.response.body = {
+              msg: `no coingecko symbol ticker found for ${symbol}`,
+            };
+            return undefined;
+          case "FetchError":
+          case "DecodeError":
+            ctx.response.status = 404;
+            ctx.response.body = {
+              msg: `no coingecko symbol ticker found for ${symbol}`,
+            };
+            return undefined;
+          case "BadResponse":
+            ctx.response.status = error.status;
+            ctx.response.body = {
+              msg: error.error.message,
+            };
+            return undefined;
+          case "NoHistoricPrice":
+            ctx.response.status = 404;
+            ctx.response.body = {
+              msg: `no historic price found for ${symbol}, ${daysAgo} days ago`,
+            };
+            return undefined;
+        }
+      }),
+      TE.map(
+        (priceChange) => {
+          ctx.response.body = { priceChange };
+        },
+      ),
+      ((a) => a().then(undefined)),
+    );
+  };
