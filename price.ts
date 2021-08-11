@@ -33,7 +33,12 @@ type FetchPriceError =
   | BadResponse
   | NotFound;
 
-const fetchPriceQueue = new PQueue({ interval: 60, intervalCap: 25 });
+const fetchPriceQueue = new PQueue({
+  // We set concurrency to 1 for max cache use.
+  concurrency: 1,
+  interval: 60,
+  intervalCap: 25,
+});
 
 const fetchPrices = (
   historicPriceCache: HistoricPriceCache,
@@ -45,7 +50,7 @@ const fetchPrices = (
   }&vs_currencies=${base}`;
 
   return pipe(
-    () => fetchPriceQueue.add(() => fetch(uri)),
+    () => fetch(uri),
     TE.fromFailableTask((error) => ({
       type: "FetchError" as const,
       error: error as Error,
@@ -135,7 +140,8 @@ export const getPrices = (
   });
 
   return pipe(
-    fetchPrices(historicPriceCache, pricesToFetch, base),
+    () =>
+      fetchPriceQueue.add(fetchPrices(historicPriceCache, pricesToFetch, base)),
     TE.map((prices) => {
       // Store newly fetched prices in cache
       Object.entries(prices).forEach(([id, price]) => {
@@ -158,7 +164,7 @@ export const getPrice = (
     priceCache.get(cacheKey),
     (mPrice) =>
       typeof mPrice === "number" ? TE.right(mPrice) : pipe(
-        fetchPrices(historicPriceCache, [id], base),
+        () => fetchPriceQueue.add(fetchPrices(historicPriceCache, [id], base)),
         TE.map((prices) => prices[id]),
       ),
     TE.map((price) => {

@@ -44,7 +44,12 @@ const startOfDay = (date: Date): Date => {
   return d;
 };
 
-const getHistoricPriceQueue = new PQueue({ interval: 60, intervalCap: 25 });
+const getHistoricPriceQueue = new PQueue({
+  // We set concurrency to 1 for max cache use.
+  concurrency: 1,
+  interval: 60,
+  intervalCap: 25,
+});
 
 type NoHistoricPrice = { type: "NoHistoricPrice"; error: Error };
 type GetHistoricPriceError =
@@ -86,7 +91,7 @@ const getHistoricPrice = (
   const uri =
     `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=${base}&days=${coinGeckoDaysAgo}&interval=daily`;
   return pipe(
-    () => getHistoricPriceQueue.add(() => fetch(uri)),
+    () => fetch(uri),
     TE.fromFailableTask((error) => {
       return ({ type: "FetchError" as const, error: error as Error });
     }),
@@ -158,7 +163,10 @@ export const getPriceChange = (
   daysAgo: number,
 ): TE.TaskEither<GetHistoricPriceError, number> => (
   pipe(
-    getHistoricPrice(historicPriceCache, id, base, daysAgo),
+    () =>
+      getHistoricPriceQueue.add(
+        getHistoricPrice(historicPriceCache, id, base, daysAgo),
+      ),
     TE.chain((historicPrice) => {
       const todayTimestamp = getTodayTimestamp();
       const key = `${todayTimestamp}-${id}-${base}`;
