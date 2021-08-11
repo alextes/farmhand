@@ -15,6 +15,7 @@ import * as A from "https://deno.land/x/fun@v1.0.0/array.ts";
 import { State } from "./server.ts";
 import { BadResponse, DecodeError, FetchError } from "./errors.ts";
 import { GetIdError } from "./id.ts";
+import * as Log from "./log.ts";
 
 export type HistoricPriceCache = LRU<number>;
 
@@ -82,8 +83,11 @@ const getHistoricPrice = (
 
   const cachedPrice = historicPriceCache.get(key);
   if (cachedPrice !== undefined) {
+    Log.debug(`price cache hit for ${id}, in ${base}`);
     return TE.right(cachedPrice);
   }
+
+  Log.debug(`price cache miss for ${id}, in ${base}`);
 
   // CoinGecko uses 'days' as today up to but excluding n 'days' ago, we want
   // including so we add 1 here.
@@ -129,6 +133,9 @@ const getHistoricPrice = (
         const historicPointKey = `${timestamp}-${id}-${base}`;
         historicPriceCache.set(historicPointKey, price);
       });
+      Log.debug(
+        `cached historic price for ${id} in ${base}, for last ${daysAgo} days`,
+      );
 
       // Oldest price returned, in position 0, is the sought after price. We return
       // it.
@@ -197,6 +204,10 @@ export const handleGetPriceChange: RouterMiddleware<RouteParams, State> =
     const result = ctx.request.body({ type: "json" });
     type Body = { base: Base; daysAgo: number };
     const { base, daysAgo }: Body = await result.value;
+
+    Log.debug(
+      `asked for price change ${ctx.params.symbol}, in ${base}, for ${daysAgo} days ago`,
+    );
 
     return pipe(
       Id.getIdBySymbol(ctx.app.state.idMapCache, symbol),

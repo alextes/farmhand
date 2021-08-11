@@ -3,6 +3,8 @@ import * as Id from "./id.ts";
 import { IdMapCache } from "./id.ts";
 import * as PriceChange from "./price_change.ts";
 import { HistoricPriceCache } from "./price_change.ts";
+import * as Log from "./log.ts";
+
 const commonSymbols = [
   "1inch",
   "aave",
@@ -83,8 +85,6 @@ export const warmUpCache = async (
       PriceChange.getPriceChange(historicPriceCache, id, "btc", 180),
       T.map(getOrThrow),
     )();
-
-    console.log("warmed cache for", symbol);
 
     await new Promise((resolve) => {
       setTimeout(resolve, 2000);

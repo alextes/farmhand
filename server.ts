@@ -3,6 +3,7 @@ import { Application, Middleware, Router } from "./deps.ts";
 import { IdMapCache } from "./id.ts";
 import { handleGetPrice, PriceCache } from "./price.ts";
 import { handleGetPriceChange, HistoricPriceCache } from "./price_change.ts";
+import * as Log from "./log.ts";
 
 const handleError: Middleware = async (
   context,
@@ -11,7 +12,7 @@ const handleError: Middleware = async (
   try {
     await next();
   } catch (err) {
-    console.error(err);
+    Log.error(String(err), { err });
     context.response.status = 500;
     context.response.body = { msg: err.message };
   }
@@ -32,7 +33,7 @@ export const makeApp = (state: State) => {
     app.use(async (ctx, next) => {
       await next();
       const rt = ctx.response.headers.get("X-Response-Time");
-      console.log(`${ctx.request.method} ${ctx.request.url} - ${rt}`);
+      Log.debug(`${ctx.request.method} ${ctx.request.url} - ${rt}`);
     });
 
     app.use(async (ctx, next) => {
@@ -55,7 +56,7 @@ export const makeApp = (state: State) => {
 
   app.addEventListener("listen", ({ hostname, port }) => {
     if (Deno.env.get("ENV") !== "test") {
-      console.log(
+      Log.info(
         `Listening on ${hostname ?? "localhost"}:${port}`,
       );
     }

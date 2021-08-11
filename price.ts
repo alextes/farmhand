@@ -14,6 +14,7 @@ import { GetIdError } from "./id.ts";
 import { HistoricPriceCache } from "./price_change.ts";
 import { Base } from "./base_unit.ts";
 import { State } from "./server.ts";
+import * as Log from "./log.ts";
 
 export type PriceCache = LRU<number>;
 
@@ -133,9 +134,11 @@ export const getPrices = (
     const cacheKey = `price-${id}-${base}`;
     const cPrice = priceCache.get(cacheKey);
     if (cPrice !== undefined) {
+      Log.debug(`price cache hit for ${id}`);
       cachedPrices[id] = cPrice;
     }
 
+    Log.debug(`price cache miss for ${id}`);
     pricesToFetch.push(id);
   });
 
@@ -145,6 +148,7 @@ export const getPrices = (
     TE.map((prices) => {
       // Store newly fetched prices in cache
       Object.entries(prices).forEach(([id, price]) => {
+        Log.debug(`cached price ${id}`);
         priceCache.set(id, price);
       });
 
@@ -168,6 +172,7 @@ export const getPrice = (
         TE.map((prices) => prices[id]),
       ),
     TE.map((price) => {
+      Log.debug(`cached price ${id}`);
       priceCache.set(cacheKey, price);
       return price;
     }),
@@ -187,6 +192,8 @@ export const handleGetPrice: RouterMiddleware<RouteParams, State> = async (
   type Body = { base: Base };
   const { base }: Body = await result.value;
 
+  Log.debug(`asked for price: ${ctx.params.symbol}`);
+
   const ePrice = await pipe(
     Id.getIdBySymbol(ctx.app.state.idMapCache, ctx.params.symbol!),
     TE.chain((id) => (
@@ -204,7 +211,7 @@ export const handleGetPrice: RouterMiddleware<RouteParams, State> = async (
     E.fold(
       (priceError) => {
         const { error } = priceError;
-        console.error(error);
+        Log.error(String(error), { error });
 
         switch (priceError.type) {
           case "FetchError":

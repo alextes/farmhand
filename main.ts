@@ -3,6 +3,7 @@ import { milisFromHours } from "./duration.ts";
 import { makeApp } from "./server.ts";
 import * as Id from "./id.ts";
 import * as CacheWarmer from "./cache_warmer.ts";
+import * as Log from "./log.ts";
 
 const hostname = Deno.env.get("ENV") === "dev" ? "localhost" : "0.0.0.0";
 const idMapCache = new LRU({ capacity: 1, stdTTL: milisFromHours(4) });
@@ -15,9 +16,9 @@ const app = makeApp({
 });
 
 CacheWarmer.warmUpCache(idMapCache, historicPriceCache).then(() => {
-  console.log("cache warm");
+  Log.info("cache warm");
 }).catch((error: unknown) => {
-  console.error(error);
+  Log.error(String(error), { error });
 });
 
 await app.listen({ hostname, port: 8080 });
