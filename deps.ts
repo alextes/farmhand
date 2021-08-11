@@ -14,6 +14,7 @@ export * as O from "https://deno.land/x/fun@v1.0.0/option.ts";
 export * as T from "https://deno.land/x/fun@v1.0.0/task.ts";
 export * as TE from "https://deno.land/x/fun@v1.0.0/task_either.ts";
 export * as M from "https://deno.land/x/fun@v1.0.0/map.ts";
+export * as S from "https://deno.land/x/fun@v1.0.0/sequence.ts";
 export { flow, pipe } from "https://deno.land/x/fun@v1.0.0/fns.ts";
 export type {
   Middleware,
