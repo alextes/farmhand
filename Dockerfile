@@ -1,4 +1,4 @@
-FROM hayd/alpine-deno:1.9.1
+FROM denoland/deno:alpine
 
 # The port that your application listens to.
 EXPOSE 8080
