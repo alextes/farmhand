@@ -55,11 +55,9 @@ export const makeApp = (state: State) => {
   app.use(router.routes());
 
   app.addEventListener("listen", ({ hostname, port }) => {
-    if (Deno.env.get("ENV") !== "test") {
-      Log.info(
-        `Listening on ${hostname ?? "localhost"}:${port}`,
-      );
-    }
+    Log.info(
+      `listening on ${hostname ?? "localhost"}:${port}`,
+    );
   });
 
   return app;
