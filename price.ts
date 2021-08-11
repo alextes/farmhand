@@ -24,7 +24,7 @@ export type PriceCache = LRU<number>;
 type RawPrices = Record<string, MultiPrice>;
 
 // where keys are the base denominations we asked for.
-export type MultiPrice = Record<string, number>;
+type MultiPrice = Record<string, number>;
 
 type NotFound = { type: "NotFound"; error: Error };
 type FetchPriceError =
@@ -58,6 +58,7 @@ const fetchPrices = (
     })),
     TE.chain((res): TE.TaskEither<FetchPriceError, Record<string, number>> => {
       if (res.status === 429) {
+        Log.warn("hit coingecko rate limit");
         // If we have shot too many price requests already, fallback to todays
         // cached price.
         const todayTimestamp = PriceChange.getTodayTimestamp();
@@ -72,12 +73,13 @@ const fetchPrices = (
 
         if (Object.keys(prices).length === ids.length) {
           // We had all prices in historic cache.
+          Log.debug("successfully fell back tot historic price cache");
           return TE.right(prices);
         }
 
         return TE.left({
           type: "BadResponse",
-          error: new Error("Hit CoinGecko API rate limit"),
+          error: new Error("hit CoinGecko API rate limit"),
           status: 429,
         });
       }
@@ -121,7 +123,7 @@ const fetchPrices = (
   );
 };
 
-export const getPrices = (
+const getPrices = (
   priceCache: PriceCache,
   historicPriceCache: HistoricPriceCache,
   ids: readonly string[],
@@ -157,25 +159,15 @@ export const getPrices = (
   );
 };
 
-export const getPrice = (
+const getPrice = (
   priceCache: PriceCache,
   historicPriceCache: HistoricPriceCache,
   id: string,
   base: Base,
 ): TE.TaskEither<FetchPriceError, number> => {
-  const cacheKey = `price-${id}-${base}`;
   return pipe(
-    priceCache.get(cacheKey),
-    (mPrice) =>
-      typeof mPrice === "number" ? TE.right(mPrice) : pipe(
-        () => fetchPriceQueue.add(fetchPrices(historicPriceCache, [id], base)),
-        TE.map((prices) => prices[id]),
-      ),
-    TE.map((price) => {
-      Log.debug(`cached price ${id}`);
-      priceCache.set(cacheKey, price);
-      return price;
-    }),
+    getPrices(priceCache, historicPriceCache, [id], base),
+    TE.map((prices) => prices[id]),
   );
 };
 
@@ -211,7 +203,7 @@ export const handleGetPrice: RouterMiddleware<RouteParams, State> = async (
     E.fold(
       (priceError) => {
         const { error } = priceError;
-        Log.error(String(error), { error });
+        Log.error(error.message, { error });
 
         switch (priceError.type) {
           case "FetchError":
