@@ -34,7 +34,7 @@ function FHPRICE(ticker, base = "usd") {
        base: lowercaseBase,
     })
   };
-  var response = UrlFetchApp.fetch(`https://farmhand.dev/coin/${lowercaseTicker}/price`, options);
+  var response = UrlFetchApp.fetch(`https://farmhand-hosnpsxrga-ew.a.run.app/coin/${lowercaseTicker}/price`, options);
   if (response.getResponseCode() === 404) {
     return "N/A"
   }
@@ -81,7 +81,7 @@ function FHCHANGE(ticker, daysAgo = 1, base = "usd") {
        daysAgo,
     })
   };
-  var response = UrlFetchApp.fetch(`https://farmhand.dev/coin/${lowercaseTicker}/price-change/`, options);
+  var response = UrlFetchApp.fetch(`https://farmhand-hosnpsxrga-ew.a.run.app/coin/${lowercaseTicker}/price-change/`, options);
   if (response.getResponseCode() === 404) {
     return "N/A"
   }
@@ -90,4 +90,38 @@ function FHCHANGE(ticker, daysAgo = 1, base = "usd") {
   cache.put(`priceChange-${lowercaseTicker}-${daysAgo}-${lowercaseBase}`, priceChange, 3600);
 
   return Number(priceChange);
+}
+
+/**
+ * Returns prices and price changes for a whole list of tokens.
+ * Example:
+ * =FHCOINS("BTC,ETH,DPI")
+ * 
+ * @param {string} tickers - a comma separated list of coin tickers
+ * @customfunction
+ * @return a table of coin prices and price changes
+ */
+function FHCOINS(tickers) {
+  if (tickers === undefined) {
+    throw new Error("need a comma-separated string of tickers")
+  }
+
+  const tickerList = tickers.split(",");
+  if (!tickerList.length > 0) {
+      throw new Error("need a comma-separated string of tickers")
+  }
+
+  var lowercaseTickers = tickerList.map(ticker => ticker.toLowerCase());
+
+  var options = {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({ coins: lowercaseTickers})
+  }
+  var response = UrlFetchApp.fetch(`https://farmhand-hosnpsxrga-ew.a.run.app/coin-data/`, options);
+  if (response.getResponseCode() === 404) {
+    return "N/A"
+  }
+  console.log(response.getContentText());
+  return JSON.parse(response.getContentText());
 }
