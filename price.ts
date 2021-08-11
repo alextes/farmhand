@@ -1,4 +1,12 @@
-import { E, LRU, pipe, RouteParams, RouterMiddleware, TE } from "./deps.ts";
+import {
+  E,
+  LRU,
+  pipe,
+  PQueue,
+  RouteParams,
+  RouterMiddleware,
+  TE,
+} from "./deps.ts";
 import { BadResponse, DecodeError, FetchError } from "./errors.ts";
 import * as Id from "./id.ts";
 import * as PriceChange from "./price_change.ts";
@@ -25,6 +33,8 @@ type FetchPriceError =
   | BadResponse
   | NotFound;
 
+const fetchPriceQueue = new PQueue({ interval: 60, intervalCap: 25 });
+
 const fetchPrices = (
   historicPriceCache: HistoricPriceCache,
   ids: string[],
@@ -35,7 +45,7 @@ const fetchPrices = (
   }&vs_currencies=${base}`;
 
   return pipe(
-    () => fetch(uri),
+    () => fetchPriceQueue.add(() => fetch(uri)),
     TE.fromFailableTask((error) => ({
       type: "FetchError" as const,
       error: error as Error,

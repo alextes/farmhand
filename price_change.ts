@@ -4,6 +4,7 @@ import {
   LRU,
   O,
   pipe,
+  PQueue,
   RouteParams,
   RouterMiddleware,
   subDays,
@@ -43,12 +44,15 @@ const startOfDay = (date: Date): Date => {
   return d;
 };
 
+const getHistoricPriceQueue = new PQueue({ interval: 60, intervalCap: 25 });
+
 type NoHistoricPrice = { type: "NoHistoricPrice"; error: Error };
 type GetHistoricPriceError =
   | BadResponse
   | DecodeError
   | FetchError
   | NoHistoricPrice;
+
 /**
  * In order to decide whether we can calculate history we look in the cache. On
  * a cache miss, we fetch the historic prices back to the sought after date. As
@@ -82,7 +86,7 @@ const getHistoricPrice = (
   const uri =
     `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=${base}&days=${coinGeckoDaysAgo}&interval=daily`;
   return pipe(
-    () => fetch(uri),
+    () => getHistoricPriceQueue.add(() => fetch(uri)),
     TE.fromFailableTask((error) => {
       return ({ type: "FetchError" as const, error: error as Error });
     }),

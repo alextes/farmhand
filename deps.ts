@@ -21,3 +21,4 @@ export type {
   RouterContext,
   RouterMiddleware,
 } from "https://deno.land/x/oak@v8.0.0/mod.ts";
+export { default as PQueue } from "https://deno.land/x/p_queue@1.0.1/mod.ts";
