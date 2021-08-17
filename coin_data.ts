@@ -42,17 +42,6 @@ export const handleGetCoinData: RouterMiddleware<RouteParams, State> = async (
     ],
   ];
 
-  const cacheState: Record<string, number> = {};
-  (ctx.app.state.historicPriceCache as HistoricPriceCache).forEach(
-    ({ key, value }) => {
-      cacheState[key] = value;
-    },
-  );
-  Deno.writeTextFileSync(
-    "./hcache.txt",
-    JSON.stringify(cacheState),
-  );
-
   const traverseSeq = A.traverse(TE.ApplicativeSeq);
   const prices = await pipe(
     coins,
