@@ -1,5 +1,6 @@
 import { Base } from "./base_unit.ts";
 import {
+  A,
   getUnixTime,
   LRU,
   O,
@@ -11,11 +12,12 @@ import {
   TE,
 } from "./deps.ts";
 import * as Id from "./id.ts";
-import * as A from "https://deno.land/x/fun@v1.0.0/array.ts";
-import { State } from "./server.ts";
 import { BadResponse, DecodeError, FetchError } from "./errors.ts";
 import { GetIdError } from "./id.ts";
 import * as Log from "./log.ts";
+import type { State } from "./middleware_state.ts";
+
+// TODO: handle historic price not existing
 
 export type HistoricPriceCache = LRU<number>;
 
@@ -80,6 +82,8 @@ const getHistoricPrice = (
   );
 
   const key = `${targetTimestamp}-${id}-${base}`;
+
+  Log.debug(`historic cache lookup ${key}`);
 
   const cachedPrice = historicPriceCache.get(key);
   if (cachedPrice !== undefined) {

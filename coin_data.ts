@@ -1,9 +1,18 @@
 import { A, E, pipe, RouteParams, RouterMiddleware, T, TE } from "./deps.ts";
 import * as Id from "./id.ts";
-import { State } from "./server.ts";
 import * as Price from "./price.ts";
 import * as PriceChange from "./price_change.ts";
 import { Base } from "./base_unit.ts";
+import type { State } from "./middleware_state.ts";
+import { HistoricPriceCache } from "./price_change.ts";
+
+const getOrThrow = <A>(e: E.Either<{ error: { message: string } }, A>) => {
+  if (E.isLeft(e)) {
+    throw e.left;
+  }
+
+  return (e as { right: A }).right;
+};
 
 export const handleGetCoinData: RouterMiddleware<RouteParams, State> = async (
   ctx,
@@ -33,13 +42,16 @@ export const handleGetCoinData: RouterMiddleware<RouteParams, State> = async (
     ],
   ];
 
-  const getOrThrow = <A>(e: E.Either<{ error: { message: string } }, A>) => {
-    if (E.isLeft(e)) {
-      throw e.left;
-    }
-
-    return (e as { right: A }).right;
-  };
+  const cacheState: Record<string, number> = {};
+  (ctx.app.state.historicPriceCache as HistoricPriceCache).forEach(
+    ({ key, value }) => {
+      cacheState[key] = value;
+    },
+  );
+  Deno.writeTextFileSync(
+    "./hcache.txt",
+    JSON.stringify(cacheState),
+  );
 
   const traverseSeq = A.traverse(TE.ApplicativeSeq);
   const prices = await pipe(

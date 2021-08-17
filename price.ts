@@ -7,14 +7,14 @@ import {
   RouterMiddleware,
   TE,
 } from "./deps.ts";
-import { BadResponse, DecodeError, FetchError } from "./errors.ts";
 import * as Id from "./id.ts";
+import * as Log from "./log.ts";
 import * as PriceChange from "./price_change.ts";
+import type { State } from "./middleware_state.ts";
+import { BadResponse, DecodeError, FetchError } from "./errors.ts";
+import { Base } from "./base_unit.ts";
 import { GetIdError } from "./id.ts";
 import { HistoricPriceCache } from "./price_change.ts";
-import { Base } from "./base_unit.ts";
-import { State } from "./server.ts";
-import * as Log from "./log.ts";
 
 export type PriceCache = LRU<number>;
 
@@ -134,15 +134,21 @@ export const getPrices = (
 
   ids.forEach((id) => {
     const cacheKey = `price-${id}-${base}`;
+    Log.debug(`price cache lookup ${cacheKey}`);
     const cPrice = priceCache.get(cacheKey);
     if (cPrice !== undefined) {
       Log.debug(`price cache hit for ${id}`);
       cachedPrices[id] = cPrice;
+      return;
     }
 
     Log.debug(`price cache miss for ${id}`);
     pricesToFetch.push(id);
   });
+
+  if (pricesToFetch.length === 0) {
+    return TE.right(cachedPrices);
+  }
 
   return pipe(
     () =>
@@ -150,8 +156,9 @@ export const getPrices = (
     TE.map((prices) => {
       // Store newly fetched prices in cache
       Object.entries(prices).forEach(([id, price]) => {
+        const cacheKey = `price-${id}-${base}`;
         Log.debug(`cached price ${id}`);
-        priceCache.set(id, price);
+        priceCache.set(cacheKey, price);
       });
 
       return { ...cachedPrices, ...prices };
