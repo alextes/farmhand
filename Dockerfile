@@ -16,6 +16,6 @@ RUN deno cache deps.ts
 # These steps will be re-run upon each file change in your working directory:
 ADD . .
 # Compile the main app so that it doesn't need to be compiled each startup/entry.
-RUN deno cache main.ts
+RUN deno cache serve_tokens.ts
 
 CMD ["run", "--allow-env", "--allow-net", "serve_tokens.ts"]
