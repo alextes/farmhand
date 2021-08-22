@@ -18,6 +18,7 @@ function FHPRICE(ticker, base = "usd") {
 
   var lowercaseTicker = ticker.toLowerCase();
   var lowercaseBase = base.toLowerCase();
+  var cacheKey = `price-${lowercaseTicker}-${lowercaseBase}`
 
   var cache = CacheService.getScriptCache();
   var cached = cache.get(`price-${lowercaseTicker}-${lowercaseBase}`);
@@ -66,9 +67,10 @@ function FHCHANGE(ticker, daysAgo = 1, base = "usd") {
 
   var lowercaseTicker = ticker.toLowerCase();
   var lowercaseBase = base.toLowerCase();
+  var cacheKey = `price-change-${lowercaseTicker}-${daysAgo}-${lowercaseBase}`
 
   var cache = CacheService.getScriptCache();
-  var cached = cache.get(`priceChange-${lowercaseTicker}-${daysAgo}-${lowercaseBase}`);
+  var cached = cache.get(cacheKey);
   if (cached != null) {
     return Number(cached);
   }
@@ -87,7 +89,7 @@ function FHCHANGE(ticker, daysAgo = 1, base = "usd") {
   }
   var { priceChange } = JSON.parse(response.getContentText());
 
-  cache.put(`priceChange-${lowercaseTicker}-${daysAgo}-${lowercaseBase}`, priceChange, 3600);
+  cache.put(cacheKey, priceChange, 3600);
 
   return Number(priceChange);
 }
@@ -112,6 +114,13 @@ function FHCOINS(tickers) {
   }
 
   var lowercaseTickers = tickerList.map(ticker => ticker.toLowerCase());
+  var cacheKey = `coins-${tickers.join()}`
+  
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(cacheKey);
+  if (cached != null) {
+    return JSON.parse(cached);
+  }
 
   var options = {
     method: "post",
@@ -122,6 +131,8 @@ function FHCOINS(tickers) {
   if (response.getResponseCode() === 404) {
     return "N/A"
   }
-  console.log(response.getContentText());
+
+  cache.put(cacheKey, response.getContentText())
+
   return JSON.parse(response.getContentText());
 }
