@@ -64,6 +64,7 @@ const overrides: Record<string, string> = {
   "boo": "spookyswap",
   "comp": "compound-governance-token",
   "ftt": "ftx-token",
+  "time": "wonderland",
   "uni": "uniswap",
 };
 
